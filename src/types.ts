@@ -4,7 +4,8 @@ export type FindingType =
   | 'install-script' | 'eval' | 'exec' | 'network' | 'fs-access'
   | 'env-access' | 'obfuscation' | 'crypto-wallet' | 'dynamic-require'
   | 'dynamic-exec' | 'base64-decode' | 'string-construction' | 'vm-exec'
-  | 'typosquat' | 'metadata-base64' | 'parse-error';
+  | 'typosquat' | 'metadata-base64' | 'parse-error'
+  | 'binary-suspicious' | 'cryptominer';
 
 export type IOCType =
   | 'url' | 'domain' | 'ip' | 'env-var'
@@ -47,5 +48,6 @@ export interface ScanResult {
 export interface PackageFiles {
   packageJson: Record<string, any>;
   jsFiles: { path: string; content: string }[];
+  binaryFiles: { path: string; header: Buffer }[];
   basePath: string;
 }
