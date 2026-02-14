@@ -135,6 +135,7 @@ function calcScore(findings: Finding[]): number {
   if ((has('obfuscation') || has('base64-decode')) && has('exec')) s *= 1.5;
   if (has('env-access') && has('network')) s *= 1.3;
   if (has('cryptominer') && has('network')) s *= 1.5;
+  if (has('geo-trigger') && has('fs-access')) s *= 1.3;
 
   return Math.min(Math.round(s * 10) / 10, 10);
 }

@@ -2,13 +2,52 @@ import * as acorn from 'acorn';
 import * as walk from 'acorn-walk';
 import type { Finding } from '../types.ts';
 
+// \x68\x65\x6c\x6c\x6f or \u0072\u0065\u0071 — 3+ consecutive = sus
+const HEX_CHAIN = /(?:\\x[0-9a-fA-F]{2}){3,}/;
+const UNICODE_CHAIN = /(?:\\u[0-9a-fA-F]{4}){3,}/;
+const UNICODE_BRACE = /(?:\\u\{[0-9a-fA-F]+\}){3,}/;
+
 export function analyzeAST(files: { path: string; content: string }[]): Finding[] {
   const findings: Finding[] = [];
   for (const f of files) {
+    scanEscapes(f.content, f.path, findings);
     const ast = parse(f.content, f.path, findings);
     if (ast) walkTree(ast, f.content, f.path, findings);
   }
   return findings;
+}
+
+function scanEscapes(src: string, file: string, out: Finding[]) {
+  const lines = src.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const hm = HEX_CHAIN.exec(line);
+    if (hm) {
+      const decoded = hm[0].replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+      out.push({
+        type: 'hex-escape', severity: 'danger',
+        message: `Hex escape sequence → "${decoded}"`,
+        file, line: i + 1, code: line.slice(Math.max(0, hm.index - 10), hm.index + hm[0].length + 10).trim(),
+      });
+    }
+    const um = UNICODE_CHAIN.exec(line);
+    if (um) {
+      const decoded = um[0].replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+      out.push({
+        type: 'hex-escape', severity: 'danger',
+        message: `Unicode escape sequence → "${decoded}"`,
+        file, line: i + 1, code: line.slice(Math.max(0, um.index - 10), um.index + um[0].length + 10).trim(),
+      });
+    }
+    const bm = UNICODE_BRACE.exec(line);
+    if (bm) {
+      out.push({
+        type: 'hex-escape', severity: 'danger',
+        message: 'Unicode brace escape sequence',
+        file, line: i + 1, code: line.slice(Math.max(0, bm.index - 10), bm.index + bm[0].length + 10).trim(),
+      });
+    }
+  }
 }
 
 function parse(src: string, path: string, findings: Finding[]) {
@@ -132,6 +171,27 @@ function walkTree(ast: acorn.Node, src: string, file: string, out: Finding[]) {
         if (['readFileSync','readFile','readdirSync','readdir','existsSync','writeFileSync','writeFile','appendFileSync','unlinkSync','rmdirSync','rmSync'].includes(node.property.name))
           out.push({ type: 'fs-access', severity: 'warning', message: `fs.${node.property.name}()`, file, line, code });
       }
+
+      // geo/locale sniffing — protestware pattern
+      if (node.object?.name === 'Intl' && node.property?.name === 'DateTimeFormat')
+        out.push({ type: 'geo-trigger', severity: 'warning', message: 'Intl.DateTimeFormat — locale/timezone sniffing', file, line, code });
+      if (node.object?.name === 'navigator' && node.property?.name === 'language')
+        out.push({ type: 'geo-trigger', severity: 'warning', message: 'navigator.language — locale check', file, line, code });
+      if (node.object?.name === 'navigator' && node.property?.name === 'languages')
+        out.push({ type: 'geo-trigger', severity: 'warning', message: 'navigator.languages — locale check', file, line, code });
     },
   });
+
+  // resolvedOptions().locale / .timeZone
+  const geoRe = /resolvedOptions\(\)\s*\.\s*(locale|timeZone)/g;
+  let gm;
+  while ((gm = geoRe.exec(src)) !== null) {
+    let ln = 1;
+    for (let i = 0; i < gm.index; i++) if (src[i] === '\n') ln++;
+    out.push({
+      type: 'geo-trigger', severity: 'warning',
+      message: `resolvedOptions().${gm[1]} — geo conditional`,
+      file, line: ln, code: src.slice(gm.index, gm.index + 40),
+    });
+  }
 }

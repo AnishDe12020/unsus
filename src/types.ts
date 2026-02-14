@@ -5,7 +5,8 @@ export type FindingType =
   | 'env-access' | 'obfuscation' | 'crypto-wallet' | 'dynamic-require'
   | 'dynamic-exec' | 'base64-decode' | 'string-construction' | 'vm-exec'
   | 'typosquat' | 'metadata-base64' | 'parse-error'
-  | 'binary-suspicious' | 'cryptominer';
+  | 'binary-suspicious' | 'cryptominer'
+  | 'hex-escape' | 'geo-trigger';
 
 export type IOCType =
   | 'url' | 'domain' | 'ip' | 'env-var'
