@@ -5,8 +5,10 @@ import { analyzeMetadata } from './analyzers/metadata.ts';
 import { analyzeAST } from './analyzers/ast.ts';
 import { analyzeEntropy } from './analyzers/entropy.ts';
 import { extractIOCs } from './analyzers/regex.ts';
+import { analyzeBinaries } from './analyzers/binary.ts';
 
 const JS_EXT = new Set(['.js', '.mjs', '.cjs']);
+const BIN_EXT = new Set(['.exe', '.dll', '.so', '.dylib', '.bin', '.sh', '.bat', '.ps1', '.cmd']);
 
 export async function scan(target: string): Promise<ScanResult> {
   const dir = path.resolve(target);
@@ -18,6 +20,7 @@ export async function scan(target: string): Promise<ScanResult> {
     Promise.resolve(analyzeAST(pkg.jsFiles)),
     Promise.resolve(analyzeEntropy(pkg.jsFiles)),
     Promise.resolve(extractIOCs(pkg.jsFiles)),
+    Promise.resolve(analyzeBinaries(pkg)),
   ]);
 
   const findings: Finding[] = [];
@@ -30,6 +33,7 @@ export async function scan(target: string): Promise<ScanResult> {
   if (results[1]?.status === 'fulfilled') findings.push(...results[1].value);
   if (results[2]?.status === 'fulfilled') findings.push(...results[2].value);
   if (results[3]?.status === 'fulfilled') iocs.push(...results[3].value);
+  if (results[4]?.status === 'fulfilled') findings.push(...results[4].value);
 
   // log crashes
   for (const r of results)
@@ -63,42 +67,76 @@ function loadPkg(dir: string): PackageFiles {
   try { packageJson = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')); } catch {}
 
   const jsFiles: { path: string; content: string }[] = [];
-  walk(dir, jsFiles, dir);
-  return { packageJson, jsFiles, basePath: dir };
+  const binaryFiles: { path: string; header: Buffer }[] = [];
+  walk(dir, jsFiles, binaryFiles, dir);
+  return { packageJson, jsFiles, binaryFiles, basePath: dir };
 }
 
-function walk(dir: string, out: { path: string; content: string }[], base: string) {
+function walk(
+  dir: string,
+  jsOut: { path: string; content: string }[],
+  binOut: { path: string; header: Buffer }[],
+  base: string,
+) {
   let entries: fs.Dirent[];
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
 
   for (const e of entries) {
     if (e.name === 'node_modules' || e.name === '.git') continue;
     const full = path.join(dir, e.name);
-    if (e.isDirectory()) { walk(full, out, base); continue; }
-    if (e.isFile() && JS_EXT.has(path.extname(e.name))) {
-      try { out.push({ path: path.relative(base, full), content: fs.readFileSync(full, 'utf-8') }); } catch {}
+    if (e.isDirectory()) { walk(full, jsOut, binOut, base); continue; }
+    if (!e.isFile()) continue;
+
+    const ext = path.extname(e.name);
+    const rel = path.relative(base, full);
+
+    if (JS_EXT.has(ext)) {
+      try { jsOut.push({ path: rel, content: fs.readFileSync(full, 'utf-8') }); } catch {}
+    }
+    if (BIN_EXT.has(ext) || (!JS_EXT.has(ext) && ext !== '.json' && ext !== '.md' && ext !== '.txt')) {
+      try {
+        const fd = fs.openSync(full, 'r');
+        const buf = Buffer.alloc(16);
+        fs.readSync(fd, buf, 0, 16, 0);
+        fs.closeSync(fd);
+        binOut.push({ path: rel, header: buf });
+      } catch {}
     }
   }
 }
 
+const WEIGHTS: Record<string, number[]> = {
+  critical: [2.5, 1.5, 1.0],  // 4th+ = 0.5
+  danger:   [1.5, 1.0],       // 3rd+ = 0.5
+  warning:  [0.5, 0.3],       // 3rd+ = 0.15
+};
+
 function calcScore(findings: Finding[]): number {
+  const counts: Record<string, number> = { critical: 0, danger: 0, warning: 0, info: 0 };
   let s = 0;
+
   for (const f of findings) {
-    if (f.severity === 'critical') s += 3;
-    else if (f.severity === 'danger') s += 2;
-    else if (f.severity === 'warning') s += 1;
-    else s += 0.25;
+    const sev = f.severity;
+    const n = counts[sev] ?? 0;
+    counts[sev] = n + 1;
+
+    if (sev === 'info') { s += 0.1; continue; }
+
+    const w = WEIGHTS[sev];
+    if (!w) continue;
+    s += n < w.length ? w[n]! : (sev === 'warning' ? 0.15 : 0.5);
   }
 
   const types = new Set(findings.map(f => f.type));
   const has = (t: string) => types.has(t as any);
 
   // compound risk
-  if (has('install-script') && (has('network') || has('exec'))) s *= 1.5;
-  if ((has('obfuscation') || has('base64-decode')) && has('exec')) s *= 2.0;
-  if (has('env-access') && has('network')) s *= 1.5;
+  if (has('install-script') && (has('network') || has('exec'))) s *= 1.3;
+  if ((has('obfuscation') || has('base64-decode')) && has('exec')) s *= 1.5;
+  if (has('env-access') && has('network')) s *= 1.3;
+  if (has('cryptominer') && has('network')) s *= 1.5;
 
-  return Math.min(s, 10);
+  return Math.min(Math.round(s * 10) / 10, 10);
 }
 
 function toLevel(s: number): ScanResult['riskLevel'] {

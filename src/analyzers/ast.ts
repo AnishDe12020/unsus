@@ -127,9 +127,9 @@ function walkTree(ast: acorn.Node, src: string, file: string, out: Finding[]) {
       if (node.object?.name === 'process' && node.property?.name === 'env')
         out.push({ type: 'env-access', severity: 'warning', message: 'process.env access', file, line, code });
 
-      // fs.readFileSync, fs.readdirSync, etc
+      // fs operations
       if (node.object?.name === 'fs' && node.property?.type === 'Identifier') {
-        if (['readFileSync','readFile','readdirSync','readdir','existsSync'].includes(node.property.name))
+        if (['readFileSync','readFile','readdirSync','readdir','existsSync','writeFileSync','writeFile','appendFileSync','unlinkSync','rmdirSync','rmSync'].includes(node.property.name))
           out.push({ type: 'fs-access', severity: 'warning', message: `fs.${node.property.name}()`, file, line, code });
       }
     },
