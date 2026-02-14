@@ -1,0 +1,9 @@
+{
+  "name": "phantom-loader-test",
+  "version": "1.0.0",
+  "description": "Test package for multi-stage detection",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  }
+}
