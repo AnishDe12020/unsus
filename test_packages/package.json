@@ -1,9 +1,6 @@
 {
-  "name": "helpful-utils-v2",
-  "version": "1.0.0",
-  "description": "A helpful utility library",
-  "main": "index.js",
-  "scripts": {
-    "postinstall": "node setup.js"
-  }
+  "name": "string-helper-plus",
+  "version": "2.1.0",
+  "description": "Enhanced string utilities",
+  "main": "index.js"
 }
