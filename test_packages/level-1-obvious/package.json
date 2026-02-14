@@ -1,9 +1,0 @@
-{
-  "name": "helpful-utils-v2",
-  "version": "1.0.0",
-  "description": "A helpful utility library",
-  "main": "index.js",
-  "scripts": {
-    "postinstall": "node setup.js"
-  }
-}

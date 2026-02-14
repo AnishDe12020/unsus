@@ -1,6 +1,0 @@
-{
-  "name": "array-toolkit",
-  "version": "1.3.7",
-  "description": "Advanced array manipulation utilities",
-  "main": "utils.js"
-}

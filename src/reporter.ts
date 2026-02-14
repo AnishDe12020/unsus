@@ -68,5 +68,43 @@ export function printReport(r: ScanResult) {
     console.log(table.toString().split('\n').map(l => '  ' + l).join('\n'));
   }
 
+  if (r.dynamicAnalysis) {
+    const d = r.dynamicAnalysis;
+    console.log();
+    console.log(chalk.bold('  Dynamic Analysis (Docker sandbox):'));
+
+    const status = d.timedOut
+      ? chalk.red('TIMED OUT')
+      : d.installExit === 0
+        ? chalk.green('OK')
+        : chalk.yellow(`exit ${d.installExit}`);
+    console.log(`  Install: ${status}  ${chalk.dim(`${d.installDuration}s`)}`);
+
+    if (d.networkAttempts.length) {
+      console.log(`  ${chalk.hex('#ff8800')(`${d.networkAttempts.length} outbound request(s) blocked:`)}`);
+      for (const n of d.networkAttempts.slice(0, 10)) {
+        console.log(`    ${chalk.red('→')} ${n.domain}  ${chalk.dim(n.raw)}`);
+      }
+      if (d.networkAttempts.length > 10) console.log(chalk.dim(`    ... and ${d.networkAttempts.length - 10} more`));
+    }
+
+    if (d.resourceSamples.length > 2) {
+      const avgCpu = d.resourceSamples.reduce((s, x) => s + x.cpu, 0) / d.resourceSamples.length;
+      const peakCpu = Math.max(...d.resourceSamples.map(x => x.cpu));
+      const peakMem = Math.max(...d.resourceSamples.map(x => x.mem));
+      const cpuColor = avgCpu > 50 ? chalk.red : avgCpu > 25 ? chalk.yellow : chalk.green;
+      console.log(`  CPU: ${cpuColor(`avg ${avgCpu.toFixed(0)}%`)} / peak ${peakCpu.toFixed(0)}%  ${chalk.dim(`mem peak ${peakMem.toFixed(0)}MB`)}`);
+    }
+
+    const suspicious = d.fsChanges.filter(f => !f.includes('node_modules') && !f.includes('package-lock'));
+    if (suspicious.length) {
+      console.log(`  ${chalk.yellow(`${suspicious.length} file(s) created outside node_modules:`)}`);
+      for (const f of suspicious.slice(0, 5)) {
+        console.log(`    ${chalk.dim(f)}`);
+      }
+      if (suspicious.length > 5) console.log(chalk.dim(`    ... and ${suspicious.length - 5} more`));
+    }
+  }
+
   console.log();
 }

@@ -6,7 +6,8 @@ export type FindingType =
   | 'dynamic-exec' | 'base64-decode' | 'string-construction' | 'vm-exec'
   | 'typosquat' | 'metadata-base64' | 'parse-error'
   | 'binary-suspicious' | 'cryptominer'
-  | 'hex-escape' | 'geo-trigger';
+  | 'hex-escape' | 'geo-trigger'
+  | 'dynamic-network' | 'dynamic-resource' | 'dynamic-fs';
 
 export type IOCType =
   | 'url' | 'domain' | 'ip' | 'env-var'
@@ -35,6 +36,16 @@ export interface DeobfuscationResult {
   riskLevel: number;
 }
 
+export interface DynamicResult {
+  networkAttempts: { domain: string; raw: string }[];
+  resourceSamples: { ts: number; cpu: number; mem: number }[];
+  fsChanges: string[];
+  installExit: number;
+  installDuration: number;
+  timedOut: boolean;
+  stdout: string;
+}
+
 export interface ScanResult {
   packageName: string;
   version: string;
@@ -43,6 +54,7 @@ export interface ScanResult {
   findings: Finding[];
   iocs: IOC[];
   deobfuscated?: DeobfuscationResult[];
+  dynamicAnalysis?: DynamicResult;
   summary: string;
 }
 
