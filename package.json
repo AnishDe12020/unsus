@@ -1,15 +1,15 @@
 {
   "name": "unsus",
-  "module": "index.ts",
-  "type": "module",
-  "private": true,
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/node": "^25.2.3"
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "peerDependencies": {
-    "typescript": "^5"
-  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
   "dependencies": {
     "acorn": "^8.15.0",
     "acorn-walk": "^8.3.4",
@@ -17,6 +17,14 @@
     "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
-    "ora": "^9.3.0"
+    "ora": "^9.3.0",
+    "pacote": "^21.3.1",
+    "semver": "^7.7.4",
+    "tar": "^7.5.7"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }
