@@ -130,9 +130,10 @@ export function printAIAnalysis(ai: AIAnalysis, scannerScore?: number, finalScor
   if (ai.verdict === 'safe' && !ai.analysis) return;
 
   const style = verdictStyle[ai.verdict] || verdictStyle.skipped!;
+  const providerTag = ai.provider ? ` (${ai.provider[0]!.toUpperCase() + ai.provider.slice(1)})` : '';
 
   const header: string[] = [
-    chalk.bold(`AI Verdict: ${style.color(style.label)}`),
+    chalk.bold(`AI Verdict${providerTag}: ${style.color(style.label)}`),
   ];
 
   if (ai.aiScore !== null && scannerScore !== undefined) {

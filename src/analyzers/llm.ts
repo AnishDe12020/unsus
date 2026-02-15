@@ -2,9 +2,38 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { ScanResult, Finding } from '../types.ts';
 
-function hasClaudeCLI(): boolean {
-  const result = Bun.spawnSync(['which', 'claude'], { stdout: 'pipe', stderr: 'pipe' });
-  return result.exitCode === 0;
+export type AIProvider = 'claude' | 'gemini' | 'codex';
+
+const PROVIDERS: { name: AIProvider; bin: string; args: (prompt: string) => string[] }[] = [
+  { name: 'claude', bin: 'claude', args: (p) => ['claude', '-p', '--output-format', 'text', p] },
+  { name: 'gemini', bin: 'gemini', args: (p) => ['gemini', '-p', p] },
+  { name: 'codex',  bin: 'codex',  args: (p) => ['codex', 'exec', p] },
+];
+
+function isInstalled(bin: string): boolean {
+  return Bun.spawnSync(['which', bin], { stdout: 'pipe', stderr: 'pipe' }).exitCode === 0;
+}
+
+function detectProvider(preferred?: string): AIProvider | null {
+  if (preferred && preferred !== 'auto') {
+    const p = PROVIDERS.find(p => p.name === preferred);
+    if (p && isInstalled(p.bin)) return p.name;
+    return null;
+  }
+  // auto: first installed wins
+  for (const p of PROVIDERS) {
+    if (isInstalled(p.bin)) return p.name;
+  }
+  return null;
+}
+
+async function runProvider(provider: AIProvider, prompt: string): Promise<{ output: string; exitCode: number; stderr: string }> {
+  const p = PROVIDERS.find(x => x.name === provider)!;
+  const proc = Bun.spawn(p.args(prompt), { stdout: 'pipe', stderr: 'pipe' });
+  const output = await new Response(proc.stdout).text();
+  await proc.exited;
+  const stderr = await new Response(proc.stderr).text();
+  return { output, exitCode: proc.exitCode ?? 1, stderr };
 }
 
 /**
@@ -24,7 +53,6 @@ function gatherPackageContext(result: ScanResult, pkgDir: string): string {
   const installScriptFinding = result.findings.find(f => f.type === 'install-script');
   if (installScriptFinding) {
     const scriptCmd = installScriptFinding.code || installScriptFinding.message;
-    // try to extract the script filename
     const match = scriptCmd.match(/(?:node|sh|bash)\s+(\S+)/);
     if (match) {
       try {
@@ -45,7 +73,6 @@ function gatherPackageContext(result: ScanResult, pkgDir: string): string {
     filesRead.add(f.file);
     try {
       const content = fs.readFileSync(path.join(pkgDir, f.file), 'utf-8');
-      // for big files, include first 4000 chars
       const trimmed = content.length > 4000 ? content.slice(0, 4000) + '\n... (truncated)' : content;
       sections.push(`## ${f.file}\n\`\`\`js\n${trimmed}\n\`\`\``);
     } catch {}
@@ -126,81 +153,80 @@ export interface AIAnalysis {
   aiScore: number | null;
   analysis: string;
   reason: string;
+  provider: AIProvider | null;
+}
+
+function parseResponse(text: string): { verdict: AIAnalysis['verdict']; aiScore: number | null; analysis: string } {
+  let verdict: AIAnalysis['verdict'] = 'suspicious';
+  let aiScore: number | null = null;
+
+  for (const line of text.split('\n')) {
+    const l = line.trim();
+
+    const scoreMatch = l.match(/^AI_SCORE\s*:\s*([\d.]+)/i);
+    if (scoreMatch) {
+      aiScore = Math.min(10, Math.max(0, parseFloat(scoreMatch[1]!)));
+    }
+
+    const verdictMatch = l.match(/^AI_VERDICT\s*:\s*(\w+)/i);
+    if (verdictMatch) {
+      const v = verdictMatch[1]!.toLowerCase();
+      if (v === 'safe') verdict = 'safe';
+      else if (v === 'malicious') verdict = 'malicious';
+      else verdict = 'suspicious';
+    }
+  }
+
+  const analysisMatch = text.match(/ANALYSIS:\s*\n([\s\S]*?)(?=\nAI_SCORE:|\nAI_VERDICT:|$)/i);
+  const analysis = analysisMatch ? analysisMatch[1]!.trim() : text;
+
+  return { verdict, aiScore, analysis };
 }
 
 export async function analyzeWithAI(
   result: ScanResult,
   pkgDir: string,
-  opts?: { force?: boolean }
+  opts?: { force?: boolean; provider?: string }
 ): Promise<AIAnalysis> {
+  const skip = (reason: string): AIAnalysis => ({ verdict: 'skipped', aiScore: null, analysis: '', reason, provider: null });
+
   if (result.findings.length === 0) {
-    return { verdict: 'safe', aiScore: 0, analysis: '', reason: 'No findings to analyze' };
+    return { verdict: 'safe', aiScore: 0, analysis: '', reason: 'No findings to analyze', provider: null };
   }
 
   const hasSeriousFindings = result.findings.some(f => f.severity === 'danger' || f.severity === 'critical');
   if (!opts?.force && result.riskScore <= 0.5 && !hasSeriousFindings) {
-    return { verdict: 'safe', aiScore: null, analysis: '', reason: 'Score too low to warrant AI analysis' };
+    return { verdict: 'safe', aiScore: null, analysis: '', reason: 'Score too low to warrant AI analysis', provider: null };
   }
 
-  if (!hasClaudeCLI()) {
-    return { verdict: 'skipped', aiScore: null, analysis: '', reason: 'Claude CLI not installed' };
+  const provider = detectProvider(opts?.provider);
+  if (!provider) {
+    const wanted = opts?.provider && opts.provider !== 'auto' ? opts.provider : 'claude/gemini/codex';
+    return skip(`No AI CLI found (tried ${wanted}). Install one: claude, gemini, or codex`);
   }
 
   const prompt = buildPrompt(result, pkgDir);
   if (!prompt) {
-    return { verdict: 'safe', aiScore: null, analysis: '', reason: 'No code context to analyze' };
+    return { verdict: 'safe', aiScore: null, analysis: '', reason: 'No code context to analyze', provider: null };
   }
 
   try {
-    const proc = Bun.spawn(
-      ['claude', '-p', '--output-format', 'text', prompt],
-      { stdout: 'pipe', stderr: 'pipe' }
-    );
+    const { output, exitCode, stderr } = await runProvider(provider, prompt);
 
-    const output = await new Response(proc.stdout).text();
-    await proc.exited;
-
-    if (proc.exitCode !== 0) {
-      const stderr = await new Response(proc.stderr).text();
-      return { verdict: 'skipped', aiScore: null, analysis: '', reason: `Claude CLI error: ${stderr.slice(0, 200)}` };
+    if (exitCode !== 0) {
+      return skip(`${provider} CLI error: ${stderr.slice(0, 200)}`);
     }
 
-    const text = output.trim();
-
-    // parse structured response
-    let verdict: AIAnalysis['verdict'] = 'suspicious';
-    let aiScore: number | null = null;
-
-    for (const line of text.split('\n')) {
-      const l = line.trim();
-
-      // AI_SCORE: 2.5
-      const scoreMatch = l.match(/^AI_SCORE\s*:\s*([\d.]+)/i);
-      if (scoreMatch) {
-        aiScore = Math.min(10, Math.max(0, parseFloat(scoreMatch[1]!)));
-      }
-
-      // AI_VERDICT: SAFE
-      const verdictMatch = l.match(/^AI_VERDICT\s*:\s*(\w+)/i);
-      if (verdictMatch) {
-        const v = verdictMatch[1]!.toLowerCase();
-        if (v === 'safe') verdict = 'safe';
-        else if (v === 'malicious') verdict = 'malicious';
-        else verdict = 'suspicious';
-      }
-    }
-
-    // extract just the analysis text (between ANALYSIS: and AI_SCORE:)
-    const analysisMatch = text.match(/ANALYSIS:\s*\n([\s\S]*?)(?=\nAI_SCORE:|\nAI_VERDICT:|$)/i);
-    const analysis = analysisMatch ? analysisMatch[1]!.trim() : text;
+    const { verdict, aiScore, analysis } = parseResponse(output.trim());
 
     return {
       verdict,
       aiScore,
       analysis,
-      reason: `AI analysis triggered (scanner: ${result.riskScore}/10, AI: ${aiScore !== null ? aiScore + '/10' : 'N/A'})`,
+      reason: `AI analysis via ${provider} (scanner: ${result.riskScore}/10, AI: ${aiScore !== null ? aiScore + '/10' : 'N/A'})`,
+      provider,
     };
   } catch (e: any) {
-    return { verdict: 'skipped', aiScore: null, analysis: '', reason: `Failed to run claude: ${e.message}` };
+    return skip(`Failed to run ${provider}: ${e.message}`);
   }
 }

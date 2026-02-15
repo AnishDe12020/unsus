@@ -46,9 +46,10 @@ program
   .argument('<package>', 'npm package name (e.g. express, lodash@4.17.21)')
   .option('--json', 'raw JSON output')
   .option('--no-dynamic', 'skip dynamic analysis (Docker sandbox)')
-  .option('--no-ai', 'skip AI analysis (Claude CLI)')
+  .option('--no-ai', 'skip AI analysis')
+  .option('--ai-provider <provider>', 'AI backend: claude|gemini|codex|auto', 'auto')
   .option('--fail-on <level>', 'exit 1 if risk >= level (safe|low|medium|high|critical)', 'high')
-  .action(async (pkg: string, opts: { json?: boolean; dynamic?: boolean; ai?: boolean; failOn?: string }) => {
+  .action(async (pkg: string, opts: { json?: boolean; dynamic?: boolean; ai?: boolean; aiProvider?: string; failOn?: string }) => {
     const isLocal = pkg.startsWith('.') || pkg.startsWith('/') || fs.existsSync(pkg);
     const spinner = opts.json ? null : ora(isLocal ? `Scanning ${pkg}...` : `Fetching ${pkg} from npm...`).start();
 
@@ -77,7 +78,7 @@ program
 
       if (opts.json) {
         if (opts.ai !== false) {
-          const ai = await analyzeWithAI(result, dir);
+          const ai = await analyzeWithAI(result, dir, { provider: opts.aiProvider });
           const combined = computeFinalScore(result.riskScore, ai);
           finalScore = combined.finalScore;
           finalLevel = combined.finalLevel;
@@ -90,8 +91,8 @@ program
         printReport(result);
 
         if (opts.ai !== false) {
-          const aiSpinner = ora('Running AI analysis (Claude)...').start();
-          const ai = await analyzeWithAI(result, dir);
+          const aiSpinner = ora('Running AI analysis...').start();
+          const ai = await analyzeWithAI(result, dir, { provider: opts.aiProvider });
           aiSpinner.stop();
           const combined = computeFinalScore(result.riskScore, ai);
           finalScore = combined.finalScore;
@@ -126,12 +127,13 @@ program
   .argument('<packages...>', 'npm packages to install')
   .option('--pm <manager>', 'package manager (bun|npm|yarn|pnpm)')
   .option('--no-dynamic', 'skip dynamic analysis (Docker sandbox)')
-  .option('--no-ai', 'skip AI analysis (Claude CLI)')
+  .option('--no-ai', 'skip AI analysis')
+  .option('--ai-provider <provider>', 'AI backend: claude|gemini|codex|auto', 'auto')
   .option('--fail-on <level>', 'block install if risk >= level', 'high')
   .option('--dry-run', 'scan only, do not install')
   .option('--json', 'JSON output')
   .action(async (packages: string[], opts: {
-    pm?: string; dynamic?: boolean; ai?: boolean; failOn?: string; dryRun?: boolean; json?: boolean;
+    pm?: string; dynamic?: boolean; ai?: boolean; aiProvider?: string; failOn?: string; dryRun?: boolean; json?: boolean;
   }) => {
     const pm = opts.pm || detectPM();
     const threshold = LEVEL_ORDER.indexOf(opts.failOn || 'high');
@@ -162,8 +164,8 @@ program
           printReport(result);
 
           if (opts.ai !== false) {
-            const aiSpinner = ora('Running AI analysis (Claude)...').start();
-            const ai = await analyzeWithAI(result, fetched.dir);
+            const aiSpinner = ora('Running AI analysis...').start();
+            const ai = await analyzeWithAI(result, fetched.dir, { provider: opts.aiProvider });
             aiSpinner.stop();
             const combined = computeFinalScore(result.riskScore, ai);
             finalScore = combined.finalScore;
