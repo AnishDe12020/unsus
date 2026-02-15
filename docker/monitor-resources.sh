@@ -1,4 +1,9 @@
 #!/bin/sh
+# Wait for phase 2 signal before recording
+while [ ! -f /output/.phase2 ]; do
+  sleep 0.2
+done
+
 echo "ts,cpu,mem" > /output/resources.csv
 while true; do
   TS=$(date +%s%3N)

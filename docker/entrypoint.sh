@@ -1,5 +1,4 @@
 #!/bin/sh
-set -e
 
 # start resource monitor
 /monitor-resources.sh &
@@ -9,20 +8,39 @@ MON_PID=$!
 cp -r /pkg/* /workspace/ 2>/dev/null || true
 cd /workspace
 
-# snapshot AFTER copy, so copied files don't show as "new"
+# PHASE 1: install dependencies (needs network, scripts disabled — safe)
+npm install --ignore-scripts 2>&1 | tee /output/install-deps.log || true
+
+# rebuild native addons (safe, not straced)
+npm rebuild 2>/dev/null || true
+
+# snapshot AFTER dep install + rebuild
 find /workspace -type f 2>/dev/null | sort > /output/fs-before.txt || true
 
-# run npm install under strace to capture ALL connect() syscalls (node, curl, binaries, etc)
+# PHASE 2: run lifecycle scripts under strace
+# Only these are suspicious — they run arbitrary code from the package author
+# Signal resource monitor to start recording now (not during npm install/rebuild)
+touch /output/.phase2
 START=$(date +%s%3N)
 EXIT=0
-timeout 25s strace -f -e trace=connect -o /output/strace.log \
-  npm install --ignore-scripts=false 2>&1 | tee /output/install.log || EXIT=$?
+> /output/strace.log
+
+if [ -f package.json ]; then
+  for HOOK in preinstall install postinstall; do
+    SCRIPT=$(node -e "try{const p=require('./package.json');p.scripts&&p.scripts['$HOOK']&&console.log(p.scripts['$HOOK'])}catch{}" 2>/dev/null)
+    if [ -n "$SCRIPT" ]; then
+      timeout 15s strace -f -e trace=connect -o /output/strace-${HOOK}.log \
+        sh -c "$SCRIPT" 2>&1 | tee -a /output/install.log || EXIT=$?
+      cat /output/strace-${HOOK}.log >> /output/strace.log 2>/dev/null || true
+    fi
+  done
+fi
 END=$(date +%s%3N)
 
 # parse strace output into network.log
 /parse-strace.sh /output/strace.log
 
-# snapshot after install
+# snapshot after scripts
 find /workspace -type f 2>/dev/null | sort > /output/fs-after.txt || true
 
 # diff fs

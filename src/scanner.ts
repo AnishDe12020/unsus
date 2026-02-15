@@ -8,6 +8,7 @@ import { extractIOCs } from './analyzers/regex.ts';
 import { analyzeBinaries } from './analyzers/binary.ts';
 import { runDynamic } from './dynamic/sandbox.ts';
 import { checkThreatIntel } from './analyzers/threatintel.ts';
+import { analyzeNpmAudit } from './analyzers/npm-audit.ts';
 
 const JS_EXT = new Set(['.js', '.mjs', '.cjs']);
 const BIN_EXT = new Set(['.exe', '.dll', '.so', '.dylib', '.bin', '.sh', '.bat', '.ps1', '.cmd']);
@@ -17,6 +18,7 @@ export async function scan(target: string, opts?: { dynamic?: boolean }): Promis
   const pkg = loadPkg(dir);
 
   const results = await Promise.allSettled([
+    analyzeNpmAudit(dir),
     Promise.resolve(analyzeMetadata(pkg)),
     Promise.resolve(analyzeAST(pkg.jsFiles)),
     Promise.resolve(analyzeEntropy(pkg.jsFiles)),
@@ -27,14 +29,21 @@ export async function scan(target: string, opts?: { dynamic?: boolean }): Promis
   const findings: Finding[] = [];
   const iocs: IOC[] = [];
 
-  if (results[0]?.status === 'fulfilled') {
-    findings.push(...results[0].value.findings);
-    iocs.push(...results[0].value.iocs);
+  // [0] npm audit
+  if (results[0]?.status === 'fulfilled') findings.push(...results[0].value);
+  // [1] metadata
+  if (results[1]?.status === 'fulfilled') {
+    findings.push(...results[1].value.findings);
+    iocs.push(...results[1].value.iocs);
   }
-  if (results[1]?.status === 'fulfilled') findings.push(...results[1].value);
+  // [2] AST
   if (results[2]?.status === 'fulfilled') findings.push(...results[2].value);
-  if (results[3]?.status === 'fulfilled') iocs.push(...results[3].value);
-  if (results[4]?.status === 'fulfilled') findings.push(...results[4].value);
+  // [3] entropy
+  if (results[3]?.status === 'fulfilled') findings.push(...results[3].value);
+  // [4] IOCs
+  if (results[4]?.status === 'fulfilled') iocs.push(...results[4].value);
+  // [5] binaries
+  if (results[5]?.status === 'fulfilled') findings.push(...results[5].value);
 
   for (const r of results)
     if (r.status === 'rejected') console.error('[!] analyzer error:', r.reason?.message || r.reason);
@@ -68,7 +77,7 @@ export async function scan(target: string, opts?: { dynamic?: boolean }): Promis
     }
   }
 
-  // dedup findings from same type+file+line (e.g. multiple fetch() on same line)
+  // dedup findings from same type+file+line
   const dedupKey = (f: Finding) => `${f.type}:${f.file}:${f.line}`;
   const seenFindings = new Set<string>();
   const dedupedFindings = findings.filter(f => {
@@ -171,6 +180,7 @@ function calcScore(findings: Finding[]): number {
   if (has('geo-trigger') && has('fs-access')) s *= 1.3;
   if (has('dynamic-network') && has('install-script')) s *= 1.5;
   if (has('threat-intel')) s *= 1.5;
+  if (has('npm-audit')) s *= 1.2;
 
   return Math.min(Math.round(s * 10) / 10, 10);
 }

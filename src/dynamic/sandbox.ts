@@ -29,7 +29,6 @@ export async function runDynamic(pkgPath: string, timeout = 30): Promise<{ resul
   const proc = Bun.spawn([
     'docker', 'run',
     '--name', containerName,
-    '--network=none',
     '--read-only',
     '--cap-drop=ALL',
     '--cap-add=SYS_PTRACE',

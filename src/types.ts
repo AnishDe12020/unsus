@@ -8,7 +8,7 @@ export type FindingType =
   | 'binary-suspicious' | 'cryptominer'
   | 'hex-escape' | 'geo-trigger'
   | 'dynamic-network' | 'dynamic-resource' | 'dynamic-fs'
-  | 'threat-intel';
+  | 'threat-intel' | 'npm-audit';
 
 export type IOCType =
   | 'url' | 'domain' | 'ip' | 'env-var'
