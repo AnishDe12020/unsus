@@ -7,6 +7,7 @@ import { analyzeEntropy } from './analyzers/entropy.ts';
 import { extractIOCs } from './analyzers/regex.ts';
 import { analyzeBinaries } from './analyzers/binary.ts';
 import { runDynamic } from './dynamic/sandbox.ts';
+import { checkThreatIntel } from './analyzers/threatintel.ts';
 
 const JS_EXT = new Set(['.js', '.mjs', '.cjs']);
 const BIN_EXT = new Set(['.exe', '.dll', '.so', '.dylib', '.bin', '.sh', '.bat', '.ps1', '.cmd']);
@@ -47,6 +48,14 @@ export async function scan(target: string, opts?: { dynamic?: boolean }): Promis
     return true;
   });
 
+  // threat intel enrichment
+  try {
+    const ti = await checkThreatIntel(uniqIOCs);
+    findings.push(...ti.findings);
+  } catch (e: any) {
+    console.error('[!] threat intel check failed:', e.message);
+  }
+
   // dynamic analysis
   let dynamicAnalysis;
   if (opts?.dynamic) {
@@ -58,6 +67,18 @@ export async function scan(target: string, opts?: { dynamic?: boolean }): Promis
       console.error('[!] dynamic analysis failed:', e.message);
     }
   }
+
+  // dedup findings from same type+file+line (e.g. multiple fetch() on same line)
+  const dedupKey = (f: Finding) => `${f.type}:${f.file}:${f.line}`;
+  const seenFindings = new Set<string>();
+  const dedupedFindings = findings.filter(f => {
+    const k = dedupKey(f);
+    if (seenFindings.has(k)) return false;
+    seenFindings.add(k);
+    return true;
+  });
+  findings.length = 0;
+  findings.push(...dedupedFindings);
 
   const score = calcScore(findings);
   const level = toLevel(score);
@@ -145,10 +166,11 @@ function calcScore(findings: Finding[]): number {
   // compound risk
   if (has('install-script') && (has('network') || has('exec'))) s *= 1.3;
   if ((has('obfuscation') || has('base64-decode')) && has('exec')) s *= 1.5;
-  if (has('env-access') && has('network')) s *= 1.3;
+  if (has('env-access-sensitive') && has('network')) s *= 1.3;
   if (has('cryptominer') && has('network')) s *= 1.5;
   if (has('geo-trigger') && has('fs-access')) s *= 1.3;
   if (has('dynamic-network') && has('install-script')) s *= 1.5;
+  if (has('threat-intel')) s *= 1.5;
 
   return Math.min(Math.round(s * 10) / 10, 10);
 }
