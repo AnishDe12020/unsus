@@ -20,13 +20,13 @@ program
   .description('Scan a package directory for malicious patterns')
   .argument('<target>', 'path to package directory')
   .option('--json', 'raw JSON output')
-  .option('--dynamic', 'run dynamic analysis in Docker sandbox')
+  .option('--no-dynamic', 'skip dynamic analysis (Docker sandbox)')
   .option('--fail-on <level>', 'exit 1 if risk >= level (safe|low|medium|high|critical)', 'high')
   .action(async (target: string, opts: { json?: boolean; dynamic?: boolean; failOn?: string }) => {
     const spinner = opts.json ? null : ora(`Scanning ${target}...`).start();
 
     if (opts.dynamic && spinner) spinner.text = 'Static analysis...';
-    const result = await scan(target, { dynamic: opts.dynamic });
+    const result = await scan(target, { dynamic: opts.dynamic !== false });
 
     if (opts.json) {
       console.log(JSON.stringify(result, null, 2));
@@ -58,7 +58,7 @@ program
   .description('Scan npm packages for malware before installing')
   .argument('<packages...>', 'npm packages to install')
   .option('--pm <manager>', 'package manager (bun|npm|yarn|pnpm)')
-  .option('--dynamic', 'run dynamic analysis in Docker sandbox')
+  .option('--no-dynamic', 'skip dynamic analysis (Docker sandbox)')
   .option('--fail-on <level>', 'block install if risk >= level', 'high')
   .option('--dry-run', 'scan only, do not install')
   .option('--json', 'JSON output')
@@ -82,7 +82,7 @@ program
 
       try {
         if (spinner) spinner.text = `Scanning ${pkg}...`;
-        const result = await scan(fetched.dir, { dynamic: opts.dynamic });
+        const result = await scan(fetched.dir, { dynamic: opts.dynamic !== false });
 
         if (opts.json) {
           console.log(JSON.stringify(result, null, 2));

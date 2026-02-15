@@ -7,11 +7,49 @@ const HEX_CHAIN = /(?:\\x[0-9a-fA-F]{2}){3,}/;
 const UNICODE_CHAIN = /(?:\\u[0-9a-fA-F]{4}){3,}/;
 const UNICODE_BRACE = /(?:\\u\{[0-9a-fA-F]+\}){3,}/;
 
+// env vars that are completely normal — downgrade to info
+const BENIGN_ENV_PREFIXES = ['npm_config_', 'npm_package_', 'npm_lifecycle_'];
+const BENIGN_ENV_VARS = new Set([
+  'NODE_ENV', 'HOME', 'PATH', 'PWD', 'USER', 'SHELL', 'LANG', 'TERM', 'EDITOR',
+  'CI', 'NETLIFY', 'HEROKU', 'DEBUG', 'VERBOSE', 'LOG_LEVEL', 'NODE_DEBUG',
+  'NO_COLOR', 'FORCE_COLOR', 'REGISTRY_URL', 'HOSTNAME', 'PORT', 'HOST',
+  'TMPDIR', 'TMP', 'TEMP', 'COLORTERM', 'COLUMNS', 'LINES',
+]);
+const BENIGN_ENV_GLOB_PREFIXES = ['GITHUB_', 'VERCEL_', 'NEXT_PUBLIC_', 'REACT_APP_'];
+
+// env vars that indicate credential exfiltration — escalate to danger
+const SENSITIVE_ENV_PATTERNS = [
+  'SECRET', 'TOKEN', 'KEY', 'PASSWORD', 'PASSWD', 'CREDENTIAL', 'AUTH',
+  'PRIVATE', 'API_KEY', 'APIKEY', 'ACCESS_KEY',
+];
+const SENSITIVE_ENV_PREFIXES = ['AWS_', 'AZURE_', 'GCP_', 'GOOGLE_CLOUD_'];
+const SENSITIVE_ENV_VARS = new Set([
+  'DATABASE_URL', 'REDIS_URL', 'MONGODB_URI', 'MONGO_URL',
+  'SMTP_PASSWORD', 'SENDGRID_API_KEY', 'STRIPE_SECRET',
+  'SSH_PRIVATE_KEY', 'GPG_PRIVATE_KEY',
+]);
+
+function envSeverity(name: string): 'info' | 'warning' | 'danger' {
+  if (!name || name === '[computed]') return 'warning';
+  const upper = name.toUpperCase();
+  if (BENIGN_ENV_VARS.has(upper)) return 'info';
+  if (BENIGN_ENV_PREFIXES.some(p => upper.startsWith(p.toUpperCase()))) return 'info';
+  if (BENIGN_ENV_GLOB_PREFIXES.some(p => upper.startsWith(p))) return 'info';
+  if (SENSITIVE_ENV_VARS.has(upper)) return 'danger';
+  if (SENSITIVE_ENV_PREFIXES.some(p => upper.startsWith(p))) return 'danger';
+  if (SENSITIVE_ENV_PATTERNS.some(p => upper.includes(p))) return 'danger';
+  return 'warning';
+}
+
 export function analyzeAST(
   files: { path: string; content: string }[],
 ): Finding[] {
   const findings: Finding[] = [];
+  // dedupe: if both foo.js and foo.min.js exist, skip the minified copy
+  const bases = new Set(files.map(f => f.path.replace(/\.min\.(js|mjs|cjs)$/, '.$1')));
   for (const f of files) {
+    const isMin = /\.min\.(js|mjs|cjs)$/.test(f.path);
+    if (isMin && bases.has(f.path.replace(/\.min\./, '.'))) continue;
     scanEscapes(f.content, f.path, findings);
     const ast = parse(f.content, f.path, findings);
     if (ast) walkTree(ast, f.content, f.path, findings);
@@ -96,6 +134,20 @@ function walkTree(ast: acorn.Node, src: string, file: string, out: Finding[]) {
   const snip = (n: any) => src.slice(n.start, Math.min(n.end, n.start + 120));
   const ln = (n: any) => n.loc?.start?.line ?? 0;
 
+  // pre-pass: find lines with process.env.X to avoid double-counting bare process.env
+  const envAccessLines = new Set<number>();
+  walk.simple(ast, {
+    MemberExpression(node: any) {
+      if (
+        node.object?.type === "MemberExpression" &&
+        node.object.object?.name === "process" &&
+        node.object.property?.name === "env"
+      ) {
+        envAccessLines.add(ln(node));
+      }
+    },
+  });
+
   const cpNames = new Set<string>();
   walk.simple(ast, {
     VariableDeclarator(node: any) {
@@ -131,7 +183,7 @@ function walkTree(ast: acorn.Node, src: string, file: string, out: Finding[]) {
         if (callee.name === "Function") {
           out.push({
             type: "eval",
-            severity: "critical",
+            severity: "warning",
             message: "Function() constructor",
             file,
             line,
@@ -191,7 +243,7 @@ function walkTree(ast: acorn.Node, src: string, file: string, out: Finding[]) {
         if (callee.name === "fetch") {
           out.push({
             type: "network",
-            severity: "danger",
+            severity: "warning",
             message: "fetch() call",
             file,
             line,
@@ -238,7 +290,7 @@ function walkTree(ast: acorn.Node, src: string, file: string, out: Finding[]) {
           if (prop?.name === "request" || prop?.name === "get")
             out.push({
               type: "network",
-              severity: "danger",
+              severity: "warning",
               message: `${obj.name}.${prop.name}()`,
               file,
               line,
@@ -303,7 +355,7 @@ function walkTree(ast: acorn.Node, src: string, file: string, out: Finding[]) {
       if (node.callee?.type === "Identifier" && node.callee.name === "Function")
         out.push({
           type: "eval",
-          severity: "critical",
+          severity: "warning",
           message: "new Function()",
           file,
           line: ln(node),
@@ -321,22 +373,28 @@ function walkTree(ast: acorn.Node, src: string, file: string, out: Finding[]) {
         node.object.object?.name === "process" &&
         node.object.property?.name === "env"
       ) {
+        const varName = node.property?.name || "[computed]";
+        const sev = envSeverity(varName);
         out.push({
-          type: "env-access",
-          severity: "warning",
-          message: `process.env.${node.property?.name || "[computed]"}`,
+          type: sev === "danger" ? "env-access-sensitive" : "env-access",
+          severity: sev,
+          message: `process.env.${varName}`,
           file,
           line,
           code,
         });
       }
 
-      // bare process.env ref
-      if (node.object?.name === "process" && node.property?.name === "env")
+      // bare process.env ref — only flag if not part of process.env.X on same line
+      if (
+        node.object?.name === "process" &&
+        node.property?.name === "env" &&
+        !envAccessLines.has(line)
+      )
         out.push({
-          type: "env-access",
+          type: "env-access-sensitive",
           severity: "warning",
-          message: "process.env access",
+          message: "process.env access (full env object)",
           file,
           line,
           code,
