@@ -7,8 +7,8 @@ const CACHE_DIR = path.join(os.homedir(), '.unsus');
 const URLHAUS_CACHE = path.join(CACHE_DIR, 'urlhaus.json');
 const CACHE_MAX_AGE = 60 * 60 * 1000; // 1 hour
 
-// URLhaus recent URLs endpoint (JSON, last 1000 malicious URLs)
-const URLHAUS_API = 'https://urlhaus-api.abuse.ch/v1/urls/recent/limit/1000/';
+// URLhaus bulk download (no auth needed, returns recent malicious URLs as JSON)
+const URLHAUS_API = 'https://urlhaus.abuse.ch/downloads/json_recent/';
 
 interface URLhausEntry {
   url: string;
@@ -29,13 +29,23 @@ async function fetchURLhaus(): Promise<URLhausEntry[]> {
   try {
     const resp = await fetch(URLHAUS_API);
     if (!resp.ok) throw new Error(`URLhaus API ${resp.status}`);
-    const data = await resp.json() as { urls: any[] };
-    return (data.urls || []).map((u: any) => ({
-      url: u.url || '',
-      host: u.host || '',
-      threat: u.threat || '',
-      tags: Array.isArray(u.tags) ? u.tags : (u.tags ? [u.tags] : []),
-    }));
+    const data = await resp.json() as Record<string, any[]>;
+    // bulk format: { "id": [ { url, url_status, threat, tags, ... } ] }
+    const entries: URLhausEntry[] = [];
+    for (const [, items] of Object.entries(data)) {
+      if (!Array.isArray(items)) continue;
+      for (const u of items) {
+        let host = '';
+        try { host = new URL(u.url).hostname; } catch {}
+        entries.push({
+          url: u.url || '',
+          host,
+          threat: u.threat || '',
+          tags: Array.isArray(u.tags) ? u.tags : (u.tags ? [u.tags] : []),
+        });
+      }
+    }
+    return entries;
   } catch (e: any) {
     console.error(`[!] URLhaus fetch failed: ${e.message}`);
     return [];

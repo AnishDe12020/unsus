@@ -1,6 +1,7 @@
 import index from './index.html';
 import { scan } from '../scanner.ts';
 import { fetchPackage } from '../npm.ts';
+import { analyzeWithAI } from '../analyzers/llm.ts';
 import { saveScan, getHistory, getScan } from './db.ts';
 
 Bun.serve({
@@ -25,8 +26,9 @@ Bun.serve({
 
         try {
           const result = await scan(fetched.dir, { dynamic: true });
+          const ai = await analyzeWithAI(result, fetched.dir);
           const id = saveScan(result);
-          return Response.json({ id, ...result });
+          return Response.json({ id, ...result, aiAnalysis: ai });
         } catch (e: any) {
           return Response.json({ error: `Scan failed: ${e.message}` }, { status: 500 });
         } finally {

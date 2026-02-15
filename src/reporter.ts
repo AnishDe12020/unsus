@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import boxen from 'boxen';
 import Table from 'cli-table3';
 import type { ScanResult } from './types.ts';
+import type { AIAnalysis } from './analyzers/llm.ts';
 import { truncate } from './utils.ts';
 
 const levelColor: Record<string, (s: string) => string> = {
@@ -109,5 +110,48 @@ export function printReport(r: ScanResult) {
     }
   }
 
+  console.log();
+}
+
+const verdictStyle: Record<string, { color: (s: string) => string; label: string }> = {
+  safe: { color: chalk.green, label: 'SAFE' },
+  suspicious: { color: chalk.yellow, label: 'SUSPICIOUS' },
+  malicious: { color: chalk.red, label: 'MALICIOUS' },
+  skipped: { color: chalk.dim, label: 'SKIPPED' },
+};
+
+export function printAIAnalysis(ai: AIAnalysis, scannerScore?: number, finalScore?: number, finalLevel?: string) {
+  if (ai.verdict === 'skipped' && !ai.analysis) {
+    if (ai.reason.includes('too low')) return;
+    console.log(chalk.dim(`  AI: ${ai.reason}`));
+    return;
+  }
+
+  if (ai.verdict === 'safe' && !ai.analysis) return;
+
+  const style = verdictStyle[ai.verdict] || verdictStyle.skipped!;
+
+  const header: string[] = [
+    chalk.bold(`AI Verdict: ${style.color(style.label)}`),
+  ];
+
+  if (ai.aiScore !== null && scannerScore !== undefined) {
+    const scoreColor = (s: number) => s <= 1 ? chalk.green : s <= 3 ? chalk.blue : s <= 5 ? chalk.yellow : chalk.red;
+    header.push(`Scanner: ${scoreColor(scannerScore)(scannerScore + '/10')}  AI: ${scoreColor(ai.aiScore)(ai.aiScore + '/10')}`);
+  }
+
+  if (finalScore !== undefined && finalLevel) {
+    const finalColor = finalScore <= 1 ? chalk.green : finalScore <= 3 ? chalk.blue : finalScore <= 5 ? chalk.yellow : finalScore <= 7.5 ? chalk.hex('#ff8800') : chalk.red;
+    header.push(chalk.bold(`Final Score: ${finalColor(`${finalScore}/10 ${finalLevel.toUpperCase()}`)}`));
+  }
+
+  header.push('');
+  header.push(ai.analysis);
+
+  console.log(boxen(header.join('\n'), {
+    padding: { left: 1, right: 1, top: 0, bottom: 0 },
+    borderStyle: 'round',
+    borderColor: ai.verdict === 'malicious' ? 'red' : ai.verdict === 'suspicious' ? 'yellow' : 'green',
+  }));
   console.log();
 }

@@ -3,10 +3,35 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import { scan } from './scanner.ts';
-import { printReport } from './reporter.ts';
+import { printReport, printAIAnalysis } from './reporter.ts';
 import { fetchPackage } from './npm.ts';
+import { analyzeWithAI } from './analyzers/llm.ts';
 
 const LEVEL_ORDER = ['safe', 'low', 'medium', 'high', 'critical'];
+
+function toLevel(s: number): string {
+  if (s <= 1) return 'safe';
+  if (s <= 3) return 'low';
+  if (s <= 5) return 'medium';
+  if (s <= 7.5) return 'high';
+  return 'critical';
+}
+
+/**
+ * Blend scanner + AI scores into a final score.
+ * AI is weighted higher (0.6) because it reads actual code with understanding.
+ * Scanner (0.4) provides mechanical pattern coverage the AI might miss.
+ * When they agree, confidence is high. When they diverge, AI pulls toward reality.
+ */
+function computeFinalScore(scannerScore: number, ai: import('./analyzers/llm.ts').AIAnalysis): { finalScore: number; finalLevel: string } {
+  if (ai.aiScore === null || ai.verdict === 'skipped') {
+    return { finalScore: scannerScore, finalLevel: toLevel(scannerScore) };
+  }
+
+  const blended = Math.round((scannerScore * 0.4 + ai.aiScore * 0.6) * 10) / 10;
+  const finalScore = Math.min(10, Math.max(0, blended));
+  return { finalScore, finalLevel: toLevel(finalScore) };
+}
 
 const program = new Command();
 
@@ -17,28 +42,70 @@ program
 
 program
   .command('scan')
-  .description('Scan a package directory for malicious patterns')
-  .argument('<target>', 'path to package directory')
+  .description('Scan an npm package for malicious patterns')
+  .argument('<package>', 'npm package name (e.g. express, lodash@4.17.21)')
   .option('--json', 'raw JSON output')
   .option('--no-dynamic', 'skip dynamic analysis (Docker sandbox)')
+  .option('--no-ai', 'skip AI analysis (Claude CLI)')
   .option('--fail-on <level>', 'exit 1 if risk >= level (safe|low|medium|high|critical)', 'high')
-  .action(async (target: string, opts: { json?: boolean; dynamic?: boolean; failOn?: string }) => {
-    const spinner = opts.json ? null : ora(`Scanning ${target}...`).start();
+  .action(async (pkg: string, opts: { json?: boolean; dynamic?: boolean; ai?: boolean; failOn?: string }) => {
+    const isLocal = pkg.startsWith('.') || pkg.startsWith('/') || fs.existsSync(pkg);
+    const spinner = opts.json ? null : ora(isLocal ? `Scanning ${pkg}...` : `Fetching ${pkg} from npm...`).start();
 
-    if (opts.dynamic && spinner) spinner.text = 'Static analysis...';
-    const result = await scan(target, { dynamic: opts.dynamic !== false });
+    let dir: string;
+    let cleanup: (() => void) | undefined;
 
-    if (opts.json) {
-      console.log(JSON.stringify(result, null, 2));
+    if (isLocal) {
+      dir = pkg;
     } else {
-      spinner?.stop();
-      printReport(result);
+      try {
+        const fetched = await fetchPackage(pkg);
+        dir = fetched.dir;
+        cleanup = fetched.cleanup;
+      } catch (e: any) {
+        spinner?.fail(`Failed to fetch ${pkg}: ${e.message}`);
+        process.exit(1);
+      }
     }
 
-    // CI exit code
-    const threshold = LEVEL_ORDER.indexOf(opts.failOn || 'high');
-    const actual = LEVEL_ORDER.indexOf(result.riskLevel);
-    if (threshold >= 0 && actual >= threshold) process.exit(1);
+    try {
+      if (spinner) spinner.text = `Scanning ${pkg}...`;
+      const result = await scan(dir, { dynamic: opts.dynamic !== false });
+
+      let finalScore = result.riskScore;
+      let finalLevel = result.riskLevel;
+
+      if (opts.json) {
+        if (opts.ai !== false) {
+          const ai = await analyzeWithAI(result, dir);
+          const combined = computeFinalScore(result.riskScore, ai);
+          finalScore = combined.finalScore;
+          finalLevel = combined.finalLevel;
+          console.log(JSON.stringify({ ...result, finalScore, finalLevel, aiAnalysis: ai }, null, 2));
+        } else {
+          console.log(JSON.stringify(result, null, 2));
+        }
+      } else {
+        spinner?.stop();
+        printReport(result);
+
+        if (opts.ai !== false) {
+          const aiSpinner = ora('Running AI analysis (Claude)...').start();
+          const ai = await analyzeWithAI(result, dir);
+          aiSpinner.stop();
+          const combined = computeFinalScore(result.riskScore, ai);
+          finalScore = combined.finalScore;
+          finalLevel = combined.finalLevel;
+          printAIAnalysis(ai, result.riskScore, finalScore, finalLevel);
+        }
+      }
+
+      const threshold = LEVEL_ORDER.indexOf(opts.failOn || 'high');
+      const actual = LEVEL_ORDER.indexOf(finalLevel);
+      if (threshold >= 0 && actual >= threshold) process.exit(1);
+    } finally {
+      cleanup?.();
+    }
   });
 
 function detectPM(): string {
@@ -59,11 +126,12 @@ program
   .argument('<packages...>', 'npm packages to install')
   .option('--pm <manager>', 'package manager (bun|npm|yarn|pnpm)')
   .option('--no-dynamic', 'skip dynamic analysis (Docker sandbox)')
+  .option('--no-ai', 'skip AI analysis (Claude CLI)')
   .option('--fail-on <level>', 'block install if risk >= level', 'high')
   .option('--dry-run', 'scan only, do not install')
   .option('--json', 'JSON output')
   .action(async (packages: string[], opts: {
-    pm?: string; dynamic?: boolean; failOn?: string; dryRun?: boolean; json?: boolean;
+    pm?: string; dynamic?: boolean; ai?: boolean; failOn?: string; dryRun?: boolean; json?: boolean;
   }) => {
     const pm = opts.pm || detectPM();
     const threshold = LEVEL_ORDER.indexOf(opts.failOn || 'high');
@@ -84,16 +152,29 @@ program
         if (spinner) spinner.text = `Scanning ${pkg}...`;
         const result = await scan(fetched.dir, { dynamic: opts.dynamic !== false });
 
+        let finalScore = result.riskScore;
+        let finalLevel = result.riskLevel;
+
         if (opts.json) {
           console.log(JSON.stringify(result, null, 2));
         } else {
           spinner?.stop();
           printReport(result);
+
+          if (opts.ai !== false) {
+            const aiSpinner = ora('Running AI analysis (Claude)...').start();
+            const ai = await analyzeWithAI(result, fetched.dir);
+            aiSpinner.stop();
+            const combined = computeFinalScore(result.riskScore, ai);
+            finalScore = combined.finalScore;
+            finalLevel = combined.finalLevel;
+            printAIAnalysis(ai, result.riskScore, finalScore, finalLevel);
+          }
         }
 
-        const actual = LEVEL_ORDER.indexOf(result.riskLevel);
+        const actual = LEVEL_ORDER.indexOf(finalLevel);
         if (threshold >= 0 && actual >= threshold) {
-          blocked.push(`${pkg} (${result.riskLevel} ${result.riskScore.toFixed(1)}/10)`);
+          blocked.push(`${pkg} (${finalLevel} ${finalScore.toFixed(1)}/10)`);
         }
       } finally {
         fetched.cleanup();
