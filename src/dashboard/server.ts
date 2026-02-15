@@ -2,7 +2,7 @@ import index from './index.html';
 import { scan } from '../scanner.ts';
 import { fetchPackage } from '../npm.ts';
 import { analyzeWithAI } from '../analyzers/llm.ts';
-import { saveScan, getHistory, getScan } from './db.ts';
+import { saveScan, getHistory, getScan, clearHistory } from './db.ts';
 
 Bun.serve({
   port: 3000,
@@ -132,6 +132,7 @@ Bun.serve({
 
     '/api/history': {
       GET: () => Response.json(getHistory()),
+      DELETE: () => { clearHistory(); return Response.json({ ok: true }); },
     },
 
     '/api/scan/:id': {

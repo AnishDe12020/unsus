@@ -29,6 +29,10 @@ export function getHistory(limit = 50) {
   ).all(limit);
 }
 
+export function clearHistory() {
+  db.run('DELETE FROM scans');
+}
+
 export function getScan(id: number): ScanResult | null {
   const row: any = db.prepare('SELECT result FROM scans WHERE id = ?').get(id);
   if (!row) return null;

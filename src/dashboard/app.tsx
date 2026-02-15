@@ -210,7 +210,10 @@ function App() {
 
       {result && <ScanView result={result} />}
 
-      <HistoryFeed entries={history} onSelect={loadScan} />
+      <HistoryFeed entries={history} onSelect={loadScan} onClear={async () => {
+        await fetch('/api/history', { method: 'DELETE' });
+        setHistory([]);
+      }} />
     </div>
   );
 }
@@ -449,12 +452,15 @@ function AIPanel({ ai, scannerScore }: { ai: AIAnalysis; scannerScore: number })
   );
 }
 
-function HistoryFeed({ entries, onSelect }: { entries: HistoryEntry[]; onSelect: (id: number) => void }) {
+function HistoryFeed({ entries, onSelect, onClear }: { entries: HistoryEntry[]; onSelect: (id: number) => void; onClear: () => void }) {
   if (!entries.length) return null;
 
   return (
     <div className="history">
-      <h3>Scan History</h3>
+      <div className="history-header">
+        <h3>Scan History</h3>
+        <button className="clear-btn" onClick={onClear}>Clear</button>
+      </div>
       <div className="history-list">
         {entries.map(e => (
           <button key={e.id} className="history-entry" onClick={() => onSelect(e.id)}>
