@@ -1,0 +1,7 @@
+{
+  "name": "colors-js",
+  "version": "1.4.2",
+  "description": "get colors in your node.js console",
+  "main": "index.js",
+  "license": "MIT"
+}

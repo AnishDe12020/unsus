@@ -1,0 +1,7 @@
+{
+  "name": "quick-log-util",
+  "version": "0.3.1",
+  "description": "Lightweight logger with file output",
+  "main": "index.js",
+  "license": "MIT"
+}

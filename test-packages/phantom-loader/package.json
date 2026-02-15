@@ -1,0 +1,9 @@
+{
+  "name": "phantom-loader",
+  "version": "1.0.0",
+  "description": "Lightweight module loader with analytics",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  }
+}

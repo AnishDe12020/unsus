@@ -1,0 +1,10 @@
+{
+  "name": "event-stream",
+  "version": "3.3.6",
+  "description": "construct pipes of streams of events",
+  "main": "index.js",
+  "dependencies": {
+    "flatmap-stream": "0.1.1"
+  },
+  "license": "MIT"
+}

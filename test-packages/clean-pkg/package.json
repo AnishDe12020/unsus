@@ -1,0 +1,7 @@
+{
+  "name": "string-utils-helper",
+  "version": "1.2.0",
+  "description": "Common string utility functions",
+  "main": "index.js",
+  "license": "MIT"
+}
