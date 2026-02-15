@@ -139,7 +139,8 @@ header h1 {
 .findings h3,
 .iocs h3,
 .dynamic h3,
-.history h3 {
+.history h3,
+.ai-panel h3 {
   font-size: 0.95rem;
   color: #999;
   margin-bottom: 0.75rem;
@@ -245,6 +246,70 @@ header h1 {
   text-transform: uppercase;
 }
 
+/* AI Analysis */
+.ai-panel {
+  padding: 1rem 1.25rem;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-left: 3px solid;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.ai-panel.ai-skipped {
+  border-color: #333;
+}
+
+.ai-skip-reason {
+  color: #555;
+  font-size: 0.82rem;
+}
+
+.ai-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.ai-verdict {
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ai-provider {
+  padding: 2px 8px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+  color: #888;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.ai-scores {
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.82rem;
+  color: #888;
+}
+
+.ai-final {
+  font-weight: 700;
+  color: #ccc;
+}
+
+.ai-analysis {
+  color: #aaa;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 /* Dynamic analysis */
 .dynamic {
   margin-bottom: 1rem;
@@ -322,4 +387,183 @@ header h1 {
   color: #555;
   font-size: 0.75rem;
   white-space: nowrap;
+}
+
+/* Progress panel */
+.progress-panel {
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.progress-stage {
+  background: #111;
+  border: 1px solid #1a1a1a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.stage-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+  user-select: none;
+}
+
+.stage-icon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.icon-pending {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #333;
+}
+
+.icon-spinner {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #333;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.icon-check {
+  display: block;
+  width: 14px;
+  height: 14px;
+  position: relative;
+}
+
+.icon-check::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 5px;
+  height: 10px;
+  border: solid #22c55e;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.icon-error {
+  display: block;
+  width: 14px;
+  height: 14px;
+  position: relative;
+}
+
+.icon-error::before,
+.icon-error::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 1px;
+  width: 2px;
+  height: 12px;
+  background: #ef4444;
+}
+
+.icon-error::before { transform: rotate(45deg); }
+.icon-error::after { transform: rotate(-45deg); }
+
+.stage-label {
+  color: #ccc;
+  font-weight: 600;
+}
+
+.stage-pending .stage-label { color: #555; }
+.stage-running .stage-label { color: #3b82f6; }
+.stage-done .stage-label { color: #888; }
+.stage-error .stage-label { color: #ef4444; }
+
+.stage-message {
+  color: #666;
+  font-size: 0.78rem;
+  flex: 1;
+}
+
+.stage-message::before {
+  content: '\2014\00a0';
+  color: #333;
+}
+
+.stage-running .stage-message { color: #888; }
+
+.stage-expand {
+  color: #555;
+  font-size: 0.75rem;
+  margin-left: auto;
+}
+
+.stage-logs {
+  border-top: 1px solid #1a1a1a;
+  padding: 0.4rem 0.75rem;
+  background: #0d0d0d;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.stage-log-line {
+  font-size: 0.75rem;
+  color: #555;
+  padding: 1px 0;
+  white-space: pre-wrap;
+}
+
+/* Show more button */
+.show-more {
+  display: block;
+  width: 100%;
+  padding: 0.4rem;
+  margin-top: 0.25rem;
+  background: none;
+  border: 1px dashed #2a2a2a;
+  border-radius: 4px;
+  color: #666;
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.show-more:hover {
+  color: #999;
+  border-color: #444;
+}
+
+/* AI panel extras */
+.ai-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.ai-toggle {
+  color: #555;
+  font-size: 0.85rem;
+}
+
+.ai-scores-inline {
+  font-size: 0.78rem;
+  color: #888;
+  margin-left: auto;
 }

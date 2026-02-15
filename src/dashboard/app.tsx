@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
@@ -30,6 +30,14 @@ interface DynamicResult {
   timedOut: boolean;
 }
 
+interface AIAnalysis {
+  verdict: 'safe' | 'suspicious' | 'malicious' | 'skipped';
+  aiScore: number | null;
+  analysis: string;
+  reason: string;
+  provider: string | null;
+}
+
 interface ScanResult {
   id?: number;
   packageName: string;
@@ -39,6 +47,7 @@ interface ScanResult {
   findings: Finding[];
   iocs: IOC[];
   dynamicAnalysis?: DynamicResult;
+  aiAnalysis?: AIAnalysis;
   summary: string;
 }
 
@@ -51,20 +60,33 @@ interface HistoryEntry {
   timestamp: number;
 }
 
+interface StageInfo {
+  stage: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  message: string;
+  logs: string[];
+}
+
 const LEVEL_COLORS: Record<string, string> = {
-  safe: '#22c55e',
-  low: '#3b82f6',
-  medium: '#eab308',
-  high: '#f97316',
-  critical: '#ef4444',
+  safe: '#22c55e', low: '#3b82f6', medium: '#eab308', high: '#f97316', critical: '#ef4444',
 };
 
 const SEV_COLORS: Record<string, string> = {
-  critical: '#ef4444',
-  danger: '#f97316',
-  warning: '#eab308',
-  info: '#6b7280',
+  critical: '#ef4444', danger: '#f97316', warning: '#eab308', info: '#6b7280',
 };
+
+const VERDICT_COLORS: Record<string, string> = {
+  safe: '#22c55e', suspicious: '#eab308', malicious: '#ef4444', skipped: '#6b7280',
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  fetch: 'Fetch Package',
+  static: 'Static Analysis',
+  dynamic: 'Dynamic Analysis',
+  ai: 'AI Analysis',
+};
+
+const STAGE_ORDER = ['fetch', 'static', 'dynamic', 'ai'];
 
 function App() {
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -72,39 +94,106 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [stages, setStages] = useState<StageInfo[]>([]);
 
   useEffect(() => { loadHistory(); }, []);
 
   async function loadHistory() {
-    const res = await fetch('/api/history');
-    setHistory(await res.json());
+    try {
+      const res = await fetch('/api/history');
+      setHistory(await res.json());
+    } catch {}
   }
 
   async function doScan(pkg: string) {
     setLoading(true);
     setError('');
     setResult(null);
+    setStages(STAGE_ORDER.map(s => ({ stage: s, status: 'pending', message: '', logs: [] })));
+
     try {
       const res = await fetch('/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ package: pkg }),
       });
-      const data = await res.json();
-      if (data.error) { setError(data.error); return; }
-      setResult(data);
-      loadHistory();
+
+      if (!res.ok) {
+        const body = await res.text();
+        setError(`Server error (${res.status}): ${body}`);
+        return;
+      }
+
+      if (!res.body) {
+        setError('No response stream');
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let gotResult = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let eventType = '';
+        for (const line of lines) {
+          if (line.startsWith(': ')) continue; // SSE comment (keepalive)
+          if (line.startsWith('event: ')) {
+            eventType = line.slice(7);
+          } else if (line.startsWith('data: ') && eventType) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (eventType === 'result') gotResult = true;
+              handleSSE(eventType, data);
+            } catch {}
+            eventType = '';
+          }
+        }
+      }
+
+      if (!gotResult && !error) {
+        setError('Connection closed before scan completed');
+      }
     } catch (e: any) {
-      setError(e.message);
+      setError(e.message === 'Failed to fetch'
+        ? 'Connection lost — scan may still be running on server. Refresh to check history.'
+        : `Connection error: ${e.message}`);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function handleSSE(event: string, data: any) {
+    if (event === 'stage') {
+      setStages(prev => prev.map(s =>
+        s.stage === data.stage ? { ...s, status: data.status, message: data.message } : s
+      ));
+    } else if (event === 'log') {
+      setStages(prev => prev.map(s =>
+        s.stage === data.stage ? { ...s, logs: [...s.logs, data.message] } : s
+      ));
+    } else if (event === 'result') {
+      setResult(data);
+      loadHistory();
+    } else if (event === 'error') {
+      setError(data.error);
     }
   }
 
   async function loadScan(id: number) {
     const res = await fetch(`/api/scan/${id}`);
     const data = await res.json();
-    if (!data.error) setResult(data);
+    if (!data.error) {
+      setResult(data);
+      setStages([]);
+    }
   }
 
   return (
@@ -117,7 +206,7 @@ function App() {
       <ScanForm query={query} setQuery={setQuery} onScan={doScan} loading={loading} />
 
       {error && <div className="error-banner">{error}</div>}
-      {loading && <div className="loading">Fetching and scanning...</div>}
+      {loading && <ProgressPanel stages={stages} />}
 
       {result && <ScanView result={result} />}
 
@@ -146,6 +235,42 @@ function ScanForm({ query, setQuery, onScan, loading }: {
   );
 }
 
+function ProgressPanel({ stages }: { stages: StageInfo[] }) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const toggle = (stage: string) =>
+    setExpanded(prev => ({ ...prev, [stage]: !prev[stage] }));
+
+  return (
+    <div className="progress-panel">
+      {stages.map(s => (
+        <div key={s.stage} className={`progress-stage stage-${s.status}`}>
+          <div className="stage-header" onClick={() => s.logs.length > 0 && toggle(s.stage)}>
+            <span className="stage-icon">
+              {s.status === 'pending' && <span className="icon-pending" />}
+              {s.status === 'running' && <span className="icon-spinner" />}
+              {s.status === 'done' && <span className="icon-check" />}
+              {s.status === 'error' && <span className="icon-error" />}
+            </span>
+            <span className="stage-label">{STAGE_LABELS[s.stage] || s.stage}</span>
+            {s.message && <span className="stage-message">{s.message}</span>}
+            {s.logs.length > 0 && (
+              <span className="stage-expand">{expanded[s.stage] ? '\u25B4' : '\u25BE'}</span>
+            )}
+          </div>
+          {expanded[s.stage] && s.logs.length > 0 && (
+            <div className="stage-logs">
+              {s.logs.map((log, i) => (
+                <div key={i} className="stage-log-line">{log}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ScanView({ result }: { result: ScanResult }) {
   const color = LEVEL_COLORS[result.riskLevel] || '#fff';
 
@@ -159,6 +284,7 @@ function ScanView({ result }: { result: ScanResult }) {
         </div>
       </div>
 
+      {result.aiAnalysis && <AIPanel ai={result.aiAnalysis} scannerScore={result.riskScore} />}
       {result.findings.length > 0 && <FindingsList findings={result.findings} />}
       {result.iocs.length > 0 && <IOCTable iocs={result.iocs} />}
       {result.dynamicAnalysis && <DynamicPanel data={result.dynamicAnalysis} />}
@@ -197,16 +323,22 @@ function RiskGauge({ score, level }: { score: number; level: RiskLevel }) {
 }
 
 function FindingsList({ findings }: { findings: Finding[] }) {
+  const [collapsed, setCollapsed] = useState(findings.length > 8);
   const grouped = { critical: [] as Finding[], danger: [] as Finding[], warning: [] as Finding[], info: [] as Finding[] };
   for (const f of findings) {
     (grouped[f.severity] || grouped.info).push(f);
+  }
+  const shown = collapsed ? findings.slice(0, 8) : findings;
+  const shownGrouped = { critical: [] as Finding[], danger: [] as Finding[], warning: [] as Finding[], info: [] as Finding[] };
+  for (const f of shown) {
+    (shownGrouped[f.severity] || shownGrouped.info).push(f);
   }
 
   return (
     <div className="findings">
       <h3>Findings ({findings.length})</h3>
       {(['critical', 'danger', 'warning', 'info'] as Severity[]).map(sev => {
-        const list = grouped[sev];
+        const list = shownGrouped[sev];
         if (!list.length) return null;
         return (
           <div key={sev} className="finding-group">
@@ -222,6 +354,11 @@ function FindingsList({ findings }: { findings: Finding[] }) {
           </div>
         );
       })}
+      {findings.length > 8 && (
+        <button className="show-more" onClick={() => setCollapsed(!collapsed)}>
+          {collapsed ? `Show all ${findings.length} findings` : 'Show less'}
+        </button>
+      )}
     </div>
   );
 }
@@ -267,10 +404,47 @@ function DynamicPanel({ data }: { data: DynamicResult }) {
         <div className="network-attempts">
           <h4>Blocked outbound requests:</h4>
           {data.networkAttempts.map((n, i) => (
-            <div key={i} className="net-attempt">→ {n.domain}:{n.port}</div>
+            <div key={i} className="net-attempt">{'\u2192'} {n.domain}:{n.port}</div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function AIPanel({ ai, scannerScore }: { ai: AIAnalysis; scannerScore: number }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (ai.verdict === 'skipped' && ai.reason.includes('too low')) return null;
+  if (ai.verdict === 'skipped') {
+    return <div className="ai-panel ai-skipped"><span className="ai-skip-reason">{ai.reason}</span></div>;
+  }
+  if (ai.verdict === 'safe' && !ai.analysis) return null;
+
+  const color = VERDICT_COLORS[ai.verdict] || '#6b7280';
+  const provider = ai.provider ? ai.provider[0]!.toUpperCase() + ai.provider.slice(1) : 'AI';
+
+  const finalScore = ai.aiScore !== null
+    ? Math.round((scannerScore * 0.4 + ai.aiScore * 0.6) * 10) / 10
+    : scannerScore;
+
+  return (
+    <div className="ai-panel" style={{ borderColor: color }}>
+      <div className="ai-top" onClick={() => setCollapsed(!collapsed)}>
+        <div className="ai-header">
+          <span className="ai-verdict" style={{ color }}>
+            {ai.verdict.toUpperCase()}
+          </span>
+          <span className="ai-provider">{provider}</span>
+          {ai.aiScore !== null && (
+            <span className="ai-scores-inline">
+              Scanner: {scannerScore.toFixed(1)} / AI: {ai.aiScore.toFixed(1)} / <strong>Final: {finalScore.toFixed(1)}</strong>
+            </span>
+          )}
+        </div>
+        <span className="ai-toggle">{collapsed ? '\u25BE' : '\u25B4'}</span>
+      </div>
+      {!collapsed && ai.analysis && <p className="ai-analysis">{ai.analysis}</p>}
     </div>
   );
 }
