@@ -32,6 +32,7 @@ export async function runDynamic(pkgPath: string, timeout = 30): Promise<{ resul
     '--network=none',
     '--read-only',
     '--cap-drop=ALL',
+    '--cap-add=SYS_PTRACE',
     '--security-opt=no-new-privileges',
     '--memory=512m',
     '--cpus=1',
@@ -76,14 +77,13 @@ function parseOutput(outDir: string, timedOut: boolean): DynamicResult {
   let meta = { exitCode: -1, duration: 0, timedOut };
   try { meta = { ...meta, ...JSON.parse(readFile(path.join(base, 'meta.json'))) }; } catch {}
 
-  // network attempts (filter out npm's own registry traffic)
-  const NPM_HOSTS = new Set(['registry.npmjs.org', 'registry.npmmirror.com']);
+  // network attempts from strace connect() syscalls (format: ip:port)
   const netRaw = readFile(path.join(base, 'network.log')).trim();
   const networkAttempts = netRaw
     ? netRaw.split('\n').filter(Boolean).map(line => {
-        const domain = line.replace(/^https?:\/\//, '').split('/')[0]!.split(':')[0]!;
-        return { domain, raw: line };
-      }).filter(n => !NPM_HOSTS.has(n.domain))
+        const [ip, port] = line.split(':');
+        return { domain: ip!, port: port || '0', raw: line };
+      })
     : [];
 
   // resource samples

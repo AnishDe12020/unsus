@@ -63,7 +63,10 @@ export function printReport(r: ScanResult) {
       },
     });
     for (const ioc of r.iocs) {
-      table.push([ioc.type, truncate(ioc.value, 48), ioc.context]);
+      const val = ioc.threatMatch
+        ? chalk.red(truncate(ioc.value, 42)) + chalk.red(` [${ioc.threatMatch.source}]`)
+        : truncate(ioc.value, 48);
+      table.push([ioc.type, val, ioc.context]);
     }
     console.log(table.toString().split('\n').map(l => '  ' + l).join('\n'));
   }
