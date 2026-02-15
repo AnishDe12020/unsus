@@ -11,7 +11,7 @@ export async function analyzeNpmAudit(pkgDir: string): Promise<Finding[]> {
 
   if (!fs.existsSync(path.join(pkgDir, 'package.json'))) return findings;
 
-  // npm audit needs a lockfile — generate if missing
+  // npm audit needs a lockfile — generate if missing (with timeout to avoid blocking)
   const hasLock = fs.existsSync(path.join(pkgDir, 'package-lock.json'));
   if (!hasLock) {
     try {
@@ -19,6 +19,7 @@ export async function analyzeNpmAudit(pkgDir: string): Promise<Finding[]> {
         cwd: pkgDir,
         stdout: 'pipe',
         stderr: 'pipe',
+        timeout: 15_000, // 15s max — don't block the scan
       });
       if (lock.exitCode !== 0) return findings;
     } catch {
@@ -31,6 +32,7 @@ export async function analyzeNpmAudit(pkgDir: string): Promise<Finding[]> {
       cwd: pkgDir,
       stdout: 'pipe',
       stderr: 'pipe',
+      timeout: 10_000, // 10s max
     });
 
     // npm audit exits 1 when vulns found — output is still valid JSON

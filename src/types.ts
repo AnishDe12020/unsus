@@ -6,7 +6,7 @@ export type FindingType =
   | 'dynamic-exec' | 'base64-decode' | 'string-construction' | 'vm-exec'
   | 'typosquat' | 'metadata-base64' | 'parse-error'
   | 'binary-suspicious' | 'cryptominer'
-  | 'hex-escape' | 'geo-trigger'
+  | 'hex-escape'
   | 'dynamic-network' | 'dynamic-resource' | 'dynamic-fs'
   | 'threat-intel' | 'npm-audit';
 

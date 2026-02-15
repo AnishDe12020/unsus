@@ -177,7 +177,6 @@ function calcScore(findings: Finding[]): number {
   if ((has('obfuscation') || has('base64-decode')) && has('exec')) s *= 1.5;
   if (has('env-access-sensitive') && has('network')) s *= 1.3;
   if (has('cryptominer') && has('network')) s *= 1.5;
-  if (has('geo-trigger') && has('fs-access')) s *= 1.3;
   if (has('dynamic-network') && has('install-script')) s *= 1.5;
   if (has('threat-intel')) s *= 1.5;
   if (has('npm-audit')) s *= 1.2;

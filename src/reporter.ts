@@ -77,12 +77,15 @@ export function printReport(r: ScanResult) {
     console.log();
     console.log(chalk.bold('  Dynamic Analysis (Docker sandbox):'));
 
+    const hasScripts = d.installDuration > 0 || d.timedOut;
     const status = d.timedOut
       ? chalk.red('TIMED OUT')
-      : d.installExit === 0
-        ? chalk.green('OK')
-        : chalk.yellow(`exit ${d.installExit}`);
-    console.log(`  Install: ${status}  ${chalk.dim(`${d.installDuration}s`)}`);
+      : !hasScripts
+        ? chalk.dim('no lifecycle scripts')
+        : d.installExit === 0
+          ? chalk.green('OK')
+          : chalk.yellow(`exit ${d.installExit}`);
+    console.log(`  Install: ${status}${hasScripts ? chalk.dim(`  ${d.installDuration}s`) : ''}`);
 
     if (d.networkAttempts.length) {
       console.log(`  ${chalk.hex('#ff8800')(`${d.networkAttempts.length} outbound request(s) blocked:`)}`);

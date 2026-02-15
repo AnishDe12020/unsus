@@ -128,36 +128,72 @@ function buildPrompt(result: ScanResult, pkgDir: string): string {
   const context = gatherPackageContext(result, pkgDir);
   if (!context) return '';
 
-  return `You are an expert npm supply chain security analyst. You are reviewing a package that an automated scanner has flagged.
+  return `You are an expert npm supply chain security analyst performing triage on a package flagged by an automated scanner.
 
-Your job is to conduct an INDEPENDENT analysis. The scanner is noisy and produces false positives. You must read the actual code and determine if this package is truly malicious or benign.
+The scanner is pattern-based and produces many FALSE POSITIVES. Your job is to read the actual code, reason about intent, and determine whether this package is truly malicious or benign. Do NOT parrot the scanner — form your own independent judgment.
 
-## Package: ${result.packageName}@${result.version}
+## Package under review: ${result.packageName}@${result.version}
 ## Automated scanner score: ${result.riskScore}/10 (${result.riskLevel})
 
 ${context}
 
-## Your task
+## Analysis methodology — follow this order
 
-1. Read the actual source code above independently
-2. Look for REAL malicious patterns: data exfiltration, backdoors, cryptominers, credential theft, reverse shells, unauthorized network calls during install
-3. Distinguish legitimate library behavior from malicious behavior
-4. Give YOUR OWN risk score from 0-10, independent of the scanner
+### Step 1: Package identity
+- Is this a well-known, widely-used package (e.g. express, lodash, react)? If so, treat scanner findings with extreme skepticism.
+- Does the name look like a typosquat of a popular package (e.g. "expres", "lodashe", "reactt")?
+- Does package.json have a plausible repository URL, author, and description?
 
-## Response format (follow exactly)
+### Step 2: Install hooks (HIGHEST PRIORITY)
+- Does it have preinstall/postinstall/preuninstall scripts?
+- Do those scripts execute external code, fetch URLs, or run obfuscated commands?
+- Install hooks that run \`node index.js\` for compilation/setup are normal. Install hooks that run \`curl | sh\` or fetch remote payloads are not.
+
+### Step 3: Code behavior analysis
+Read the flagged source files and determine what they ACTUALLY do:
+- Follow the data flow. Does data leave the machine? Where does it go?
+- Is there obfuscation (hex-encoded strings, char code assembly, eval of constructed strings)? Or are "obfuscated-looking" patterns just minified code or standard encodings?
+- Are network calls legitimate API functionality (HTTP client libs, database drivers) or covert exfiltration?
+
+### Step 4: Intent assessment
+This is the critical question: **Is there evidence of malicious INTENT?**
+- Legitimate: A logging library that sends data to a user-configured endpoint
+- Malicious: A package that silently collects env vars/SSH keys/credentials and POSTs them to a hardcoded domain during install
+
+## Common false positives — DO NOT flag these as threats
+- Base64 usage for encoding/decoding in normal operations (auth headers, data URIs, API payloads)
+- Dynamic require() in plugin/loader systems (template engines, test runners, module loaders)
+- Network calls in packages whose PURPOSE is networking (HTTP clients, API SDKs, database drivers)
+- eval() in parsers, template engines, or REPL implementations
+- References to environment variables in configuration/setup code (reading PORT, NODE_ENV, etc.)
+- Minified/bundled vendor files that look "obfuscated" but are just build artifacts
+- Repository URL strings matching "base64" or "hex" patterns in package.json metadata
+
+## Real malicious indicators — these ARE threats
+- Collecting sensitive data (env vars, SSH keys, .npmrc tokens, AWS credentials) and sending them to external servers
+- Hardcoded C2 domains or IP addresses that receive exfiltrated data
+- Encoded/obfuscated payloads that decode to shell commands or network exfiltration
+- DNS-based data exfiltration (encoding stolen data as DNS subdomains)
+- Reverse shells or bind shells
+- Cryptocurrency miners
+- File system writes outside the package directory (e.g. modifying ~/.bashrc, ~/.ssh/)
+- Install scripts that download and execute remote code from untrusted sources
+
+## Response format (follow EXACTLY)
 
 ANALYSIS:
-[Your independent analysis — what does this code actually do? Any real threats?]
+[Walk through your reasoning step by step. For each scanner finding, state whether it is a true positive or false positive and why. Then give your overall assessment of the package.]
 
 AI_SCORE: [number 0-10]
 AI_VERDICT: [SAFE|SUSPICIOUS|MALICIOUS]
 
-Scoring guide:
-- 0-1: Clean, no concerns
-- 2-3: Minor concerns but likely benign
-- 4-5: Suspicious patterns worth investigating
-- 6-7: Likely malicious, multiple red flags
-- 8-10: Confirmed malicious behavior`;
+## Scoring guide
+- 0.0: Clean, well-known package, all findings are false positives
+- 0.5-1.0: Clean, no real concerns, minor scanner noise
+- 2.0-3.0: Unusual patterns but explainable — likely benign with minor code smells
+- 4.0-5.0: Genuinely suspicious patterns that warrant manual review (but not confirmed malicious)
+- 6.0-7.0: Strong indicators of malicious intent — multiple red flags, obfuscation + exfiltration patterns
+- 8.0-10.0: Confirmed malicious — clear evidence of data theft, backdoors, or destructive behavior`;
 }
 
 export interface AIAnalysis {

@@ -1,8 +1,12 @@
 #!/bin/sh
-# Container 2: NO network, runs lifecycle scripts under strace
+# Container 2: NO network, runs lifecycle scripts
+# net-hook.js captures all outbound connection attempts via NODE_OPTIONS
 # Deps already installed by container 1
 
 cd /workspace
+
+# preload net-hook to capture hostnames before DNS resolution
+export NODE_OPTIONS="--require=/net-hook.js"
 
 # start resource monitor
 /monitor-resources.sh &
@@ -13,29 +17,30 @@ find /workspace -type f 2>/dev/null | sort > /output/fs-before.txt || true
 
 START=$(date +%s%3N)
 EXIT=0
-> /output/strace.log
+> /output/install.log
 
 if [ -f package.json ]; then
   for HOOK in preinstall install postinstall; do
-    SCRIPT=$(node -e "try{const p=require('./package.json');p.scripts&&p.scripts['$HOOK']&&console.log(p.scripts['$HOOK'])}catch{}" 2>/dev/null)
+    SCRIPT=$(node --require /dev/null -e "try{const p=require('./package.json');p.scripts&&p.scripts['$HOOK']&&console.log(p.scripts['$HOOK'])}catch{}" 2>/dev/null)
     if [ -n "$SCRIPT" ]; then
       echo "[unsus] running $HOOK: $SCRIPT" >> /output/install.log
-      timeout 15s strace -f -e trace=connect -o /output/strace-${HOOK}.log \
-        sh -c "$SCRIPT" 2>&1 | tee -a /output/install.log || EXIT=$?
-      cat /output/strace-${HOOK}.log >> /output/strace.log 2>/dev/null || true
+      timeout 15s sh -c "$SCRIPT" >> /output/install.log 2>&1 || EXIT=$?
     fi
   done
 fi
 END=$(date +%s%3N)
-
-# parse strace output into network.log
-/parse-strace.sh /output/strace.log
 
 # snapshot after scripts
 find /workspace -type f 2>/dev/null | sort > /output/fs-after.txt || true
 
 # diff fs
 comm -13 /output/fs-before.txt /output/fs-after.txt > /output/fs-changes.log 2>/dev/null || true
+
+# filter out npm registry from network.log (legitimate traffic from npm install)
+if [ -f /output/network.log ]; then
+  grep -v 'registry.npmjs.org' /output/network.log > /output/network-filtered.log 2>/dev/null || true
+  mv /output/network-filtered.log /output/network.log
+fi
 
 # write meta
 DURATION=$(( (END - START) / 1000 ))

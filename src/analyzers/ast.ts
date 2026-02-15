@@ -400,23 +400,11 @@ function walkTree(ast: acorn.Node, src: string, file: string, out: Finding[]) {
           code,
         });
 
-      // fs operations
+      // fs operations — writes/deletes are suspicious, reads are normal
       if (node.object?.name === "fs" && node.property?.type === "Identifier") {
-        if (
-          [
-            "readFileSync",
-            "readFile",
-            "readdirSync",
-            "readdir",
-            "existsSync",
-            "writeFileSync",
-            "writeFile",
-            "appendFileSync",
-            "unlinkSync",
-            "rmdirSync",
-            "rmSync",
-          ].includes(node.property.name)
-        )
+        const FS_WRITE = new Set(["writeFileSync", "writeFile", "appendFileSync", "unlinkSync", "rmdirSync", "rmSync"]);
+        const FS_READ = new Set(["readFileSync", "readFile", "readdirSync", "readdir", "existsSync"]);
+        if (FS_WRITE.has(node.property.name))
           out.push({
             type: "fs-access",
             severity: "warning",
@@ -425,61 +413,18 @@ function walkTree(ast: acorn.Node, src: string, file: string, out: Finding[]) {
             line,
             code,
           });
+        else if (FS_READ.has(node.property.name))
+          out.push({
+            type: "fs-access",
+            severity: "info",
+            message: `fs.${node.property.name}()`,
+            file,
+            line,
+            code,
+          });
       }
 
-      // geo/locale sniffing — protestware pattern
-      if (
-        node.object?.name === "Intl" &&
-        node.property?.name === "DateTimeFormat"
-      )
-        out.push({
-          type: "geo-trigger",
-          severity: "warning",
-          message: "Intl.DateTimeFormat — locale/timezone sniffing",
-          file,
-          line,
-          code,
-        });
-      if (
-        node.object?.name === "navigator" &&
-        node.property?.name === "language"
-      )
-        out.push({
-          type: "geo-trigger",
-          severity: "warning",
-          message: "navigator.language — locale check",
-          file,
-          line,
-          code,
-        });
-      if (
-        node.object?.name === "navigator" &&
-        node.property?.name === "languages"
-      )
-        out.push({
-          type: "geo-trigger",
-          severity: "warning",
-          message: "navigator.languages — locale check",
-          file,
-          line,
-          code,
-        });
     },
   });
 
-  // resolvedOptions().locale / .timeZone
-  const geoRe = /resolvedOptions\(\)\s*\.\s*(locale|timeZone)/g;
-  let gm;
-  while ((gm = geoRe.exec(src)) !== null) {
-    let ln = 1;
-    for (let i = 0; i < gm.index; i++) if (src[i] === "\n") ln++;
-    out.push({
-      type: "geo-trigger",
-      severity: "warning",
-      message: `resolvedOptions().${gm[1]} — geo conditional`,
-      file,
-      line: ln,
-      code: src.slice(gm.index, gm.index + 40),
-    });
-  }
 }
