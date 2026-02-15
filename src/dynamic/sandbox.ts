@@ -23,46 +23,84 @@ export async function runDynamic(pkgPath: string, timeout = 30): Promise<{ resul
   const outDir = `/tmp/unsus-run-${Date.now()}`;
   fs.mkdirSync(path.join(outDir, 'output'), { recursive: true });
 
-  const containerName = `unsus-${Date.now()}`;
+  // shared volume for workspace (container 1 writes, container 2 reads)
+  const volName = `unsus-ws-${Date.now()}`;
+  Bun.spawnSync(['docker', 'volume', 'create', volName], { stdout: 'pipe', stderr: 'pipe' });
 
-  // run container
-  const proc = Bun.spawn([
-    'docker', 'run',
-    '--name', containerName,
-    '--read-only',
-    '--cap-drop=ALL',
-    '--cap-add=SYS_PTRACE',
-    '--security-opt=no-new-privileges',
-    '--memory=512m',
-    '--cpus=1',
-    '--pids-limit=100',
-    '--tmpfs=/workspace:rw,exec,size=200m',
-    '--tmpfs=/tmp:rw,noexec,nosuid,size=50m',
-    '-v', `${absPath}:/pkg:ro`,
-    '-v', `${path.join(outDir, 'output')}:/output`,
-    IMAGE,
-  ], { stdout: 'pipe', stderr: 'pipe' });
+  try {
+    // --- Container 1: fetch deps (has network, no scripts) ---
+    const fetchName = `unsus-fetch-${Date.now()}`;
+    const fetchProc = Bun.spawn([
+      'docker', 'run',
+      '--name', fetchName,
+      '--rm',
+      '--read-only',
+      '--cap-drop=ALL',
+      '--security-opt=no-new-privileges',
+      '--memory=512m',
+      '--cpus=1',
+      '--pids-limit=100',
+      '--tmpfs=/tmp:rw,noexec,nosuid,size=100m',
+      '-v', `${absPath}:/pkg:ro`,
+      '-v', `${volName}:/workspace`,
+      '-v', `${path.join(outDir, 'output')}:/output`,
+      '--entrypoint', '/entrypoint-fetch.sh',
+      IMAGE,
+    ], { stdout: 'pipe', stderr: 'pipe' });
 
-  // wait with timeout
-  let timedOut = false;
-  const timer = setTimeout(async () => {
-    timedOut = true;
-    Bun.spawnSync(['docker', 'kill', containerName], { stdout: 'pipe', stderr: 'pipe' });
-  }, timeout * 1000);
+    // timeout for fetch
+    let fetchTimedOut = false;
+    const fetchTimer = setTimeout(() => {
+      fetchTimedOut = true;
+      Bun.spawnSync(['docker', 'kill', fetchName], { stdout: 'pipe', stderr: 'pipe' });
+    }, timeout * 1000);
 
-  await proc.exited;
-  clearTimeout(timer);
+    await fetchProc.exited;
+    clearTimeout(fetchTimer);
 
-  // cleanup container
-  Bun.spawnSync(['docker', 'rm', '-f', containerName], { stdout: 'pipe', stderr: 'pipe' });
+    if (fetchTimedOut) {
+      console.error('[!] Fetch container timed out');
+    }
 
-  // read results from host output dir
-  const result = parseOutput(outDir, timedOut);
+    // --- Container 2: run scripts (NO network, strace) ---
+    const runName = `unsus-run-${Date.now()}`;
+    const runProc = Bun.spawn([
+      'docker', 'run',
+      '--name', runName,
+      '--rm',
+      '--network=none',
+      '--read-only',
+      '--cap-drop=ALL',
+      '--cap-add=SYS_PTRACE',
+      '--security-opt=no-new-privileges',
+      '--memory=512m',
+      '--cpus=1',
+      '--pids-limit=100',
+      '--tmpfs=/tmp:rw,noexec,nosuid,size=50m',
+      '-v', `${volName}:/workspace`,
+      '-v', `${path.join(outDir, 'output')}:/output`,
+      '--entrypoint', '/entrypoint-run.sh',
+      IMAGE,
+    ], { stdout: 'pipe', stderr: 'pipe' });
 
-  // cleanup
-  try { fs.rmSync(outDir, { recursive: true, force: true }); } catch {}
+    let runTimedOut = false;
+    const runTimer = setTimeout(() => {
+      runTimedOut = true;
+      Bun.spawnSync(['docker', 'kill', runName], { stdout: 'pipe', stderr: 'pipe' });
+    }, timeout * 1000);
 
-  return { result, findings: dynamicFindings(result) };
+    await runProc.exited;
+    clearTimeout(runTimer);
+
+    // read results
+    const result = parseOutput(outDir, runTimedOut);
+    return { result, findings: dynamicFindings(result) };
+
+  } finally {
+    // cleanup volume
+    Bun.spawnSync(['docker', 'volume', 'rm', '-f', volName], { stdout: 'pipe', stderr: 'pipe' });
+    try { fs.rmSync(outDir, { recursive: true, force: true }); } catch {}
+  }
 }
 
 function readFile(p: string): string {
@@ -76,7 +114,7 @@ function parseOutput(outDir: string, timedOut: boolean): DynamicResult {
   let meta = { exitCode: -1, duration: 0, timedOut };
   try { meta = { ...meta, ...JSON.parse(readFile(path.join(base, 'meta.json'))) }; } catch {}
 
-  // network attempts from strace connect() syscalls (format: ip:port)
+  // network attempts from strace
   const netRaw = readFile(path.join(base, 'network.log')).trim();
   const networkAttempts = netRaw
     ? netRaw.split('\n').filter(Boolean).map(line => {
@@ -114,14 +152,14 @@ function parseOutput(outDir: string, timedOut: boolean): DynamicResult {
 function dynamicFindings(r: DynamicResult): Finding[] {
   const out: Finding[] = [];
 
-  // network attempts
+  // network attempts (strace catches connect() even with --network=none)
   const seen = new Set<string>();
   for (const n of r.networkAttempts) {
     if (seen.has(n.domain)) continue;
     seen.add(n.domain);
     out.push({
       type: 'dynamic-network', severity: 'danger',
-      message: `Outbound request blocked: ${n.domain}`,
+      message: `Outbound connection attempted: ${n.domain}:${n.port}`,
       file: 'dynamic-analysis', line: 0, code: n.raw,
     });
   }
@@ -160,7 +198,7 @@ function dynamicFindings(r: DynamicResult): Finding[] {
   if (r.timedOut) {
     out.push({
       type: 'dynamic-resource', severity: 'danger',
-      message: `Install timed out after ${r.installDuration}s — possible infinite loop or hanging process`,
+      message: `Install timed out — possible infinite loop or hanging process`,
       file: 'dynamic-analysis', line: 0, code: '',
     });
   }

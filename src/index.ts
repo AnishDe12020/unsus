@@ -200,7 +200,7 @@ program
     console.log(chalk.green(`\nAll packages passed. Running: ${cmd.join(' ')}`));
     const proc = Bun.spawn(cmd, { stdout: 'inherit', stderr: 'inherit' });
     const code = await proc.exited;
-    if (code !== 0) process.exit(code);
+    process.exit(code);
   });
 
 program.parse();

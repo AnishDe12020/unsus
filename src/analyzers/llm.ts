@@ -27,13 +27,25 @@ function detectProvider(preferred?: string): AIProvider | null {
   return null;
 }
 
-async function runProvider(provider: AIProvider, prompt: string): Promise<{ output: string; exitCode: number; stderr: string }> {
+async function runProvider(provider: AIProvider, prompt: string, timeoutMs = 120_000): Promise<{ output: string; exitCode: number; stderr: string }> {
   const p = PROVIDERS.find(x => x.name === provider)!;
   const proc = Bun.spawn(p.args(prompt), { stdout: 'pipe', stderr: 'pipe' });
-  const output = await new Response(proc.stdout).text();
-  await proc.exited;
-  const stderr = await new Response(proc.stderr).text();
-  return { output, exitCode: proc.exitCode ?? 1, stderr };
+
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => {
+      proc.kill();
+      reject(new Error(`${provider} timed out after ${timeoutMs / 1000}s`));
+    }, timeoutMs)
+  );
+
+  const run = async () => {
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+    return { output, exitCode: proc.exitCode ?? 1, stderr };
+  };
+
+  return Promise.race([run(), timeout]);
 }
 
 /**
