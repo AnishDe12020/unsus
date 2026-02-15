@@ -229,6 +229,22 @@ header h1 {
   font-size: 0.75rem;
 }
 
+.threat-match {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.threat-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
 /* Dynamic analysis */
 .dynamic {
   margin-bottom: 1rem;

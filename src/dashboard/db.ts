@@ -1,7 +1,9 @@
+import * as os from 'os';
+import * as path from 'path';
 import { Database } from 'bun:sqlite';
 import type { ScanResult } from '../types.ts';
 
-const db = new Database('unsus.db');
+const db = new Database(path.join(os.tmpdir(), 'unsus.db'));
 
 db.run(`CREATE TABLE IF NOT EXISTS scans (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

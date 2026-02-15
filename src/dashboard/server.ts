@@ -24,7 +24,7 @@ Bun.serve({
         }
 
         try {
-          const result = await scan(fetched.dir);
+          const result = await scan(fetched.dir, { dynamic: true });
           const id = saveScan(result);
           return Response.json({ id, ...result });
         } catch (e: any) {

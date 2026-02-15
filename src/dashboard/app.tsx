@@ -18,6 +18,7 @@ interface IOC {
   type: string;
   value: string;
   context: string;
+  threatMatch?: { source: string; detail: string };
 }
 
 interface DynamicResult {
@@ -235,9 +236,12 @@ function IOCTable({ iocs }: { iocs: IOC[] }) {
         </thead>
         <tbody>
           {iocs.map((ioc, i) => (
-            <tr key={i}>
+            <tr key={i} className={ioc.threatMatch ? 'threat-match' : ''}>
               <td className="ioc-type">{ioc.type}</td>
-              <td className="ioc-value">{ioc.value.length > 60 ? ioc.value.slice(0, 57) + '...' : ioc.value}</td>
+              <td className="ioc-value">
+                {ioc.value.length > 60 ? ioc.value.slice(0, 57) + '...' : ioc.value}
+                {ioc.threatMatch && <span className="threat-badge">{ioc.threatMatch.source}</span>}
+              </td>
               <td className="ioc-ctx">{ioc.context}</td>
             </tr>
           ))}
