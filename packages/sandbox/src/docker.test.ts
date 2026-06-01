@@ -73,6 +73,28 @@ test("runLifecycleScriptsInDockerSandbox records timeout", async () => {
   assert.ok(result.findings.some((finding) => finding.type === "sandbox_timeout"));
 });
 
+test("runLifecycleScriptsInDockerSandbox rejects Docker infrastructure failures", async () => {
+  const fixturePath = path.join(repoRoot, "fixtures/benign/install-script-build-package");
+
+  await assert.rejects(
+    runLifecycleScriptsInDockerSandbox({
+      sourceRootPath: fixturePath,
+      packageJson: {
+        scripts: {
+          postinstall: "node postinstall.js"
+        }
+      },
+      dockerExecutor: async () => ({
+        exitCode: 1,
+        stdout: "",
+        stderr: "Cannot connect to the Docker daemon at unix:///tmp/docker.sock. Is the docker daemon running?",
+        timedOut: false
+      })
+    }),
+    /Docker sandbox infrastructure failure/
+  );
+});
+
 function workspacePathFromArgs(args: string[]): string {
   const mountIndex = args.indexOf("--mount");
   assert.notEqual(mountIndex, -1);

@@ -133,6 +133,10 @@ export async function runLifecycleScriptsInDockerSandbox(options: LifecycleSandb
         containerName
       });
 
+      if (isDockerInfrastructureFailure(result.stderr)) {
+        throw new Error(`Docker sandbox infrastructure failure: ${truncate(result.stderr)}`);
+      }
+
       finalExitCode = result.exitCode;
       timedOut = timedOut || result.timedOut;
       timeline.push(
@@ -334,4 +338,13 @@ function event(
 
 function truncate(value: string): string {
   return value.length <= OUTPUT_LIMIT ? value : `${value.slice(0, OUTPUT_LIMIT)}...<truncated>`;
+}
+
+function isDockerInfrastructureFailure(stderr: string): boolean {
+  return [
+    "Cannot connect to the Docker daemon",
+    "Is the docker daemon running",
+    "permission denied while trying to connect to the Docker daemon socket",
+    "docker: command not found"
+  ].some((fragment) => stderr.includes(fragment));
 }
