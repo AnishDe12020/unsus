@@ -177,8 +177,16 @@ async function resolveDiffTarget(target: string): Promise<ExtractedPackage> {
   try {
     return await extractLocalPackage(target);
   } catch {
+    if (looksLikeLocalPath(target)) {
+      throw new Error(`Local package path does not exist or is not a package directory: ${target}`);
+    }
+
     return resolveNpmPackage(target);
   }
+}
+
+function looksLikeLocalPath(target: string): boolean {
+  return target.startsWith(".") || target.startsWith("/") || target.includes("/") || target.includes("\\");
 }
 
 function fileHash(file: PackageFile): string {

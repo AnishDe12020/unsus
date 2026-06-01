@@ -12,5 +12,13 @@ export async function runDiffCommand(args: string[]): Promise<number> {
 
   const result = await diffTargets(target, against);
   process.stdout.write(args.includes("--json") ? formatJsonReport(result) : formatDiffText(result));
-  return result.findings.some((finding) => finding.severity === "danger" || finding.severity === "critical") ? 3 : 0;
+  if (result.findings.some((finding) => finding.severity === "danger" || finding.severity === "critical")) {
+    return 2;
+  }
+
+  if (result.findings.some((finding) => finding.severity === "warning")) {
+    return 1;
+  }
+
+  return 0;
 }

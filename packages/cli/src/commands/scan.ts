@@ -13,7 +13,15 @@ export async function runScanCommand(args: string[]): Promise<number> {
   });
 
   process.stdout.write(args.includes("--json") ? formatJsonReport(result) : formatScanText(result));
-  return result.decision === "block" ? 3 : 0;
+  if (result.decision === "block") {
+    return 2;
+  }
+
+  if (result.decision === "warn") {
+    return 1;
+  }
+
+  return 0;
 }
 
 export function firstPositional(args: string[]): string | undefined {

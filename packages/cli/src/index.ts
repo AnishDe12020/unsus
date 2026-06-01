@@ -26,11 +26,11 @@ async function main(argv: string[]): Promise<number> {
       default:
         console.error(`Unknown command: ${command}`);
         printHelp();
-        return 2;
+        return 3;
     }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
-    return 1;
+    return 3;
   }
 }
 

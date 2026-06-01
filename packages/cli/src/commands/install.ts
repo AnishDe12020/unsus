@@ -26,19 +26,20 @@ export async function runInstallCommand(args: string[]): Promise<number> {
 
   if (result.decision === "block" && !args.includes("--force")) {
     console.error("Install blocked by unsus policy. Use --force only after manual review.");
-    return 3;
+    return 2;
   }
 
   if (result.decision === "warn" && !args.includes("--yes") && !args.includes("--force")) {
     console.error("Install requires --yes after reviewing warnings.");
-    return 2;
+    return 1;
   }
 
   if (args.includes("--force")) {
     console.error("FORCE OVERRIDE: installing despite unsus findings.");
   }
 
-  return runPackageManagerInstall(pm, target);
+  const installExitCode = await runPackageManagerInstall(pm, target);
+  return installExitCode === 0 ? 0 : 3;
 }
 
 function runPackageManagerInstall(pm: string, target: string): Promise<number> {

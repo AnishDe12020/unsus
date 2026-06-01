@@ -55,6 +55,10 @@ async function resolveTarget(target: string): Promise<ExtractedPackage> {
     return extractLocalPackage(target);
   }
 
+  if (looksLikeLocalPath(target)) {
+    throw new Error(`Local package path does not exist or is not a directory: ${target}`);
+  }
+
   return resolveNpmPackage(target);
 }
 
@@ -64,6 +68,10 @@ async function isDirectory(target: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function looksLikeLocalPath(target: string): boolean {
+  return target.startsWith(".") || target.startsWith("/") || target.includes("/") || target.includes("\\");
 }
 
 function summarizeFindings(findings: Finding[]): string {
