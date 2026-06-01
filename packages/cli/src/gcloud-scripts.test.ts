@@ -146,6 +146,30 @@ test("malware lab docs define the real-payload safety gate", async () => {
   assert.match(docs, /not.*host/i);
 });
 
+test("sample availability checker is metadata-only and does not use npm cli", async () => {
+  const script = await readFile(path.join(repoRoot, "scripts/research/check-npm-sample-availability.mjs"), "utf8");
+
+  assert.match(script, /registry\.npmjs\.org/);
+  assert.match(script, /fetch\(/);
+  assert.match(script, /unsus-malicious-npm-sample-manifest/);
+  assert.match(script, /unavailable/);
+  assert.doesNotMatch(script, /npm view/);
+  assert.doesNotMatch(script, /npm install/);
+  assert.doesNotMatch(script, /dist\.tarball.*fetch/);
+});
+
+test("real-world sample docs explain removed package alternatives", async () => {
+  const docs = await readFile(path.join(repoRoot, "docs/real-world-sample-sourcing.md"), "utf8");
+
+  assert.match(docs, /metadata-only/i);
+  assert.match(docs, /removed from npm/i);
+  assert.match(docs, /quarantine/i);
+  assert.match(docs, /registry snapshot/i);
+  assert.match(docs, /do not download tarballs locally/i);
+  assert.match(docs, /check-npm-sample-availability\.mjs/);
+  assert.match(docs, /run-malicious-samples-on-vm\.sh/);
+});
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

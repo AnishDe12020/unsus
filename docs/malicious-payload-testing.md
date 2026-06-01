@@ -40,6 +40,8 @@ Example shape:
 
 Package specs are fetched on the VM, not on the host.
 
+For building these manifests from advisory candidate lists, use the metadata-only workflow in `docs/real-world-sample-sourcing.md`.
+
 ## Running The Lab
 
 ```bash
