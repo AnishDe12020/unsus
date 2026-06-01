@@ -30,6 +30,7 @@ trap cleanup EXIT
     --exclude='.git' \
     --exclude='node_modules' \
     --exclude='dist' \
+    --exclude='*.tsbuildinfo' \
     --exclude='.env' \
     --exclude='.env.*' \
     --exclude='.npmrc' \

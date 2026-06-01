@@ -24,7 +24,7 @@ test("gcloud sandbox scripts exist and are executable", async () => {
 test("sync script excludes credential and build-heavy paths", async () => {
   const content = await readFile(path.join(repoRoot, "scripts/gcloud/sync-repo-to-vm.sh"), "utf8");
 
-  for (const required of [".git", "node_modules", ".env", ".npmrc", ".ssh", ".aws", ".config", "dist"]) {
+  for (const required of [".git", "node_modules", ".env", ".npmrc", ".ssh", ".aws", ".config", "dist", "*.tsbuildinfo"]) {
     assert.match(content, new RegExp(`--exclude=['"]?${escapeRegExp(required)}`));
   }
 

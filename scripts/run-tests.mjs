@@ -25,8 +25,8 @@ await walk(packageRoot);
 testFiles.sort();
 
 if (testFiles.length === 0) {
-  console.log("No compiled test files found.");
-  process.exit(0);
+  console.error("No compiled test files found. Run npm run build or check TypeScript build outputs.");
+  process.exit(1);
 }
 
 const child = spawn(process.execPath, ["--test", ...testFiles], {
