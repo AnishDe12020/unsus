@@ -4,6 +4,7 @@ import { analyzePackage } from "../scan.js";
 import type { ExtractedPackage, Finding, PackageFile, VersionDiffResult } from "../types.js";
 import { createFinding } from "../analyzers/finding.js";
 import { extractLocalPackage } from "../extract/local.js";
+import { isNpmPackageRequest } from "../resolver/package-manager.js";
 import { resolveNpmPackage } from "../resolver/npm.js";
 
 export async function diffTargets(toTarget: string, againstTarget: string): Promise<VersionDiffResult> {
@@ -186,7 +187,7 @@ async function resolveDiffTarget(target: string): Promise<ExtractedPackage> {
 }
 
 function looksLikeLocalPath(target: string): boolean {
-  return target.startsWith(".") || target.startsWith("/") || target.includes("/") || target.includes("\\");
+  return !isNpmPackageRequest(target);
 }
 
 function fileHash(file: PackageFile): string {

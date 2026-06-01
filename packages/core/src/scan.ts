@@ -6,6 +6,7 @@ import { analyzeEntropy } from "./analyzers/entropy.js";
 import { analyzeIocs } from "./analyzers/ioc.js";
 import { analyzeMetadata } from "./analyzers/metadata.js";
 import { extractLocalPackage } from "./extract/local.js";
+import { isNpmPackageRequest } from "./resolver/package-manager.js";
 import { resolveNpmPackage } from "./resolver/npm.js";
 import { calculateRiskScore, decisionFromPolicy, defaultPolicy, riskLevelFromScore } from "./scoring/score.js";
 import type { ExtractedPackage, Finding, SandboxResult, ScanOptions, ScanResult } from "./types.js";
@@ -132,7 +133,7 @@ async function isDirectory(target: string): Promise<boolean> {
 }
 
 function looksLikeLocalPath(target: string): boolean {
-  return target.startsWith(".") || target.startsWith("/") || target.includes("/") || target.includes("\\");
+  return !isNpmPackageRequest(target);
 }
 
 function summarizeFindings(findings: Finding[]): string {

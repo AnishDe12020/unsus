@@ -38,3 +38,16 @@ export function npmPackumentUrl(name: string, registry = "https://registry.npmjs
   const encodedName = name.startsWith("@") ? name.replace("/", "%2f") : encodeURIComponent(name);
   return `${normalizedRegistry}/${encodedName}`;
 }
+
+export function isNpmPackageRequest(input: string): boolean {
+  const trimmed = input.trim();
+  if (trimmed.length === 0 || trimmed.startsWith(".") || trimmed.startsWith("/") || trimmed.includes("\\")) {
+    return false;
+  }
+
+  if (trimmed.startsWith("@")) {
+    return /^@[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+(@[A-Za-z0-9._~+^-]+)?$/.test(trimmed);
+  }
+
+  return !trimmed.includes("/") && /^[A-Za-z0-9._-]+(@[A-Za-z0-9._~+^-]+)?$/.test(trimmed);
+}
