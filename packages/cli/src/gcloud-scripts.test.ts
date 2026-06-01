@@ -49,6 +49,7 @@ test("create script uses no service account and labels the VM", async () => {
   assert.match(content, /--no-service-account/);
   assert.match(content, /--no-scopes/);
   assert.match(content, /unsus_wait_for_apt/);
+  assert.match(content, /SSH not ready yet/);
   assert.match(content, /app=unsus/);
   assert.match(content, /purpose=sandbox/);
   assert.match(content, /ttl=manual-delete/);

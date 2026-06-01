@@ -77,10 +77,7 @@ fi
 
 echo
 echo "Waiting for SSH and ensuring sandbox dependencies are installed..."
-gcloud compute ssh "${vm_name}" \
-  --project="${project}" \
-  --zone="${zone}" \
-  --command='set -euxo pipefail
+prepare_command='set -euxo pipefail
 unsus_wait_for_apt() {
   waited_seconds=0
   while sudo fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock >/dev/null 2>&1; do
@@ -102,8 +99,22 @@ sudo usermod -aG docker "$USER" || true
 docker --version
 node --version
 npm --version
-' \
-  --quiet
+'
+
+ssh_attempt=1
+until gcloud compute ssh "${vm_name}" \
+  --project="${project}" \
+  --zone="${zone}" \
+  --command="${prepare_command}" \
+  --quiet; do
+  if (( ssh_attempt >= 30 )); then
+    echo "Timed out waiting for SSH to become ready." >&2
+    exit 1
+  fi
+  echo "SSH not ready yet; retrying in 10s (${ssh_attempt}/30)..."
+  ssh_attempt=$((ssh_attempt + 1))
+  sleep 10
+done
 
 cat <<NEXT
 
