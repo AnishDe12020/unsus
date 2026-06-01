@@ -25,6 +25,7 @@ gcloud compute ssh "${vm_name}" \
 rm -rf '${remote_log_dir}'
 mkdir -p '${remote_log_dir}'
 cd '${remote_dir}'
+docker pull node:22-bookworm-slim
 
 set +e
 node packages/cli/dist/index.js scan fixtures/suspicious/postinstall-env-network --dynamic > '${remote_log_dir}/suspicious-postinstall-env-network.txt' 2>&1

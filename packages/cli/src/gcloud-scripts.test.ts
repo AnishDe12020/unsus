@@ -64,6 +64,14 @@ test("gcloud docs include safety boundaries", async () => {
   assert.match(docs, /destroy-sandbox-vm\.sh/);
 });
 
+test("fixture runner pre-pulls sandbox image before timed lifecycle scans", async () => {
+  const content = await readFile(path.join(repoRoot, "scripts/gcloud/run-fixture-on-vm.sh"), "utf8");
+
+  assert.match(content, /docker pull node:22-bookworm-slim/);
+  assert.match(content, /scan fixtures\/suspicious\/postinstall-env-network --dynamic/);
+  assert.match(content, /scan fixtures\/benign\/install-script-build-package --dynamic/);
+});
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
