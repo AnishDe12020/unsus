@@ -67,6 +67,7 @@ else
     --no-scopes \
     --metadata=startup-script='#!/usr/bin/env bash
 set -euxo pipefail
+while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock >/dev/null 2>&1; do sleep 5; done
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl git rsync tar unzip docker.io nodejs npm
 systemctl enable --now docker
@@ -80,7 +81,21 @@ gcloud compute ssh "${vm_name}" \
   --project="${project}" \
   --zone="${zone}" \
   --command='set -euxo pipefail
+unsus_wait_for_apt() {
+  waited_seconds=0
+  while sudo fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock >/dev/null 2>&1; do
+    if [ "$waited_seconds" -ge 300 ]; then
+      echo "Timed out waiting for apt/dpkg locks." >&2
+      exit 1
+    fi
+    echo "Waiting for apt/dpkg lock..."
+    sleep 5
+    waited_seconds=$((waited_seconds + 5))
+  done
+}
+unsus_wait_for_apt
 sudo apt-get update
+unsus_wait_for_apt
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl git rsync tar unzip docker.io nodejs npm
 sudo systemctl enable --now docker
 sudo usermod -aG docker "$USER" || true
@@ -97,6 +112,7 @@ VM is ready or preparation completed.
 Next:
   ./scripts/gcloud/sync-repo-to-vm.sh
   ./scripts/gcloud/run-fixture-on-vm.sh
+  ./scripts/gcloud/run-remote-npm-on-vm.sh
 
 Destroy when done:
   ./scripts/gcloud/destroy-sandbox-vm.sh

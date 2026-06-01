@@ -27,6 +27,8 @@ trap cleanup EXIT
   cd "${repo_root}"
   export COPYFILE_DISABLE=1
   tar \
+    --no-xattrs \
+    --no-mac-metadata \
     --exclude='.git' \
     --exclude='node_modules' \
     --exclude='dist' \

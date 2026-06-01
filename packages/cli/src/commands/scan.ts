@@ -11,6 +11,7 @@ export async function runScanCommand(args: string[]): Promise<number> {
   const dynamic = args.includes("--dynamic") && !args.includes("--no-dynamic");
   const result = await scanTarget(target, {
     dynamic,
+    allowRemoteDynamic: args.includes("--allow-remote-dynamic"),
     ...(dynamic
       ? {
           dynamicRunner: (pkg) =>

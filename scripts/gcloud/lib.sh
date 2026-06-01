@@ -30,3 +30,17 @@ unsus_gcloud_zone() {
   fi
   printf '%s\n' "${zone}"
 }
+
+unsus_wait_for_apt() {
+  local max_wait_seconds="${1:-300}"
+  local waited_seconds=0
+  while sudo fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock >/dev/null 2>&1; do
+    if (( waited_seconds >= max_wait_seconds )); then
+      echo "Timed out waiting for apt/dpkg locks." >&2
+      return 1
+    fi
+    echo "Waiting for apt/dpkg lock..."
+    sleep 5
+    waited_seconds=$((waited_seconds + 5))
+  done
+}

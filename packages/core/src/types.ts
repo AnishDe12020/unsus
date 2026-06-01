@@ -105,6 +105,7 @@ export interface ScanOptions {
   dynamic?: boolean;
   failOn?: RiskLevel;
   dynamicRunner?: DynamicSandboxRunner;
+  allowRemoteDynamic?: boolean;
 }
 
 export interface RiskPolicy {

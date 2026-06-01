@@ -47,6 +47,18 @@ Package lifecycle execution still happens inside Docker on the VM. The Docker co
 
 Remote npm dynamic analysis is not enabled yet. Do not use this flow for real suspicious packages or real malware.
 
+## Opt-In Benign Remote Npm Scan
+
+After the fixture workflow passes, `run-remote-npm-on-vm.sh` can run a benign npm package scan entirely from the VM:
+
+```bash
+export UNSUS_REMOTE_NPM_PACKAGE="is-number@7.0.0"
+export UNSUS_ALLOW_REMOTE_NPM_DYNAMIC=1
+./scripts/gcloud/run-remote-npm-on-vm.sh
+```
+
+This fetches the npm package on the VM, not on the host. If lifecycle scripts exist, they execute inside the VM's Docker sandbox with no network. This is not approval to run known malware yet.
+
 ## Example Flow
 
 ```bash
@@ -80,4 +92,4 @@ Do not run `gcloud auth login` inside the VM. Do not copy local `~/.config/gclou
 
 ## Later Remote Npm Dynamic Analysis
 
-A later phase can add an explicit opt-in remote npm dynamic workflow. That should fetch packages inside the VM, avoid host secrets, keep Docker no-network lifecycle execution, and require an explicit review before enabling real package samples.
+A later phase can add curated malicious sample handling with stronger artifact hygiene and review gates. That should still fetch packages inside the VM, avoid host secrets, keep Docker no-network lifecycle execution, and require explicit review before enabling real package samples.

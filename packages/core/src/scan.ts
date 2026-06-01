@@ -68,7 +68,7 @@ async function maybeRunDynamicSandbox(
     return undefined;
   }
 
-  if (!extracted.isLocal) {
+  if (!extracted.isLocal && !options.allowRemoteDynamic) {
     return {
       enabled: false,
       timedOut: false,
