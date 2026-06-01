@@ -14,7 +14,9 @@ Install dependencies like they're guilty until proven boring.
 
 ## Current Status
 
-This repository is a clean production-quality rewrite. The first vertical slice focuses on local fixture scanning, safe npm tarball extraction, static behavioral analyzers, risk scoring, version diffs, and a basic CLI.
+This repository is a clean production-quality rewrite. The first vertical slice supports local fixture scanning, safe npm tarball extraction, static behavioral analyzers, risk scoring, version diffs, hardened Docker command construction, and a basic CLI.
+
+Dynamic lifecycle execution is not wired into `scan` or `install` yet. The sandbox package currently builds the hardened Docker invocation shape; the next step is executing package lifecycle scripts inside that sandbox and returning a timeline.
 
 ## Commands
 
@@ -33,6 +35,13 @@ Install known development dependencies without lifecycle scripts:
 npm install --ignore-scripts
 npm run typecheck
 npm test
+```
+
+Local smoke examples:
+
+```bash
+node packages/cli/dist/index.js scan fixtures/benign/normal-package --json
+node packages/cli/dist/index.js diff fixtures/suspicious/postinstall-env-network --against fixtures/benign/normal-package
 ```
 
 ## Dependency Note

@@ -30,6 +30,8 @@ Dynamic analysis must run only inside Docker with:
 - no home directory, SSH, npm, GitHub, or cloud config mounts
 - sanitized environment variables
 
+Current implementation note: Docker hardening arguments are implemented and tested, but lifecycle script execution and timeline capture are not yet wired into CLI scans or installs.
+
 ## When to Use Cloud VMs
 
 Stop and request a cloud VM plan before testing real suspicious packages, unknown malware-like samples, internet-observed hostile payloads, or anything that requires networked dynamic analysis.
