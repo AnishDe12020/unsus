@@ -23,6 +23,7 @@ test("buildDockerRunArgs includes no-network and hardening flags", () => {
   assert.ok(args.includes("--read-only"));
   assert.ok(args.includes("--user"));
   assert.ok(args.includes("0:0"));
+  assert.ok(args.some((arg) => arg.startsWith("type=bind,") && !arg.includes("readonly")));
 });
 
 test("runLifecycleScriptsInDockerSandbox uses copied workspace and records file changes", async () => {

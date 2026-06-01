@@ -34,7 +34,7 @@ export function buildDockerRunArgs(options: DockerRunOptions): string[] {
     "/tmp:rw,noexec,nosuid,size=64m",
     ...(options.readOnly ?? true ? ["--read-only"] : []),
     "--mount",
-    `type=bind,src=${options.workspacePath},dst=/workspace,readonly=false`,
+    `type=bind,src=${options.workspacePath},dst=/workspace`,
     "--workdir",
     "/workspace",
     "--user",
