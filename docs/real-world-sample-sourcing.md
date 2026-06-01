@@ -69,6 +69,30 @@ If a sample is removed from npm:
 
 Do not download tarballs locally. Do not transfer archived malicious tarballs through normal repo sync. Do not commit package names that should remain private. Do not copy host secrets into a VM or mirror.
 
+## DataDog Dataset Workflow
+
+DataDog's malicious software packages dataset includes a useful npm manifest at `samples/npm/manifest.json`. The repository also contains encrypted malicious sample archives. Do not extract those archives on the host.
+
+Build an npm candidate list from the manifest only:
+
+```bash
+npm run samples:datadog-npm -- \
+  --output artifacts/malware-lab/datadog-npm-candidates.json \
+  --limit 200 \
+  --offset 0
+```
+
+Then check which exact versions still exist in the live npm metadata:
+
+```bash
+npm run samples:check-npm -- \
+  --input artifacts/malware-lab/datadog-npm-candidates.json \
+  --output artifacts/malware-lab/datadog-npm-available.json \
+  --json
+```
+
+The DataDog builder reads only `manifest.json`. It does not extract `samples/`, does not use the ZIP password, does not download npm tarballs, and does not execute package code.
+
 ## Future Work
 
 - Add a VM-only runner for quarantined tarballs.

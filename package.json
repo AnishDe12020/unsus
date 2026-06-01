@@ -13,6 +13,7 @@
     "typecheck": "tsc -b packages/core packages/sandbox packages/cli --pretty false",
     "test": "npm run build && node scripts/run-tests.mjs",
     "benchmark:synthetic": "npm run build && node scripts/benchmarks/run-synthetic-corpus.mjs",
+    "samples:datadog-npm": "node scripts/research/build-datadog-npm-candidates.mjs",
     "samples:check-npm": "node scripts/research/check-npm-sample-availability.mjs",
     "lint": "tsc -b packages/core packages/sandbox packages/cli --pretty false"
   },
