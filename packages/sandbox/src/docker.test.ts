@@ -21,6 +21,8 @@ test("buildDockerRunArgs includes no-network and hardening flags", () => {
   assert.ok(args.includes("--security-opt=no-new-privileges"));
   assert.ok(args.includes("--pids-limit=128"));
   assert.ok(args.includes("--read-only"));
+  assert.ok(args.includes("--user"));
+  assert.ok(args.includes("0:0"));
 });
 
 test("runLifecycleScriptsInDockerSandbox uses copied workspace and records file changes", async () => {

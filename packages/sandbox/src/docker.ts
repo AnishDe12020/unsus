@@ -37,6 +37,8 @@ export function buildDockerRunArgs(options: DockerRunOptions): string[] {
     `type=bind,src=${options.workspacePath},dst=/workspace,readonly=false`,
     "--workdir",
     "/workspace",
+    "--user",
+    "0:0",
     "--env",
     "HOME=/tmp",
     "--env",
