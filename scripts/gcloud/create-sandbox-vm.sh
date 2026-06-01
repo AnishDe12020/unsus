@@ -64,7 +64,7 @@ else
     --image-project="${image_project}" \
     --labels=app=unsus,purpose=sandbox,ttl=manual-delete \
     --no-service-account \
-    --scopes= \
+    --no-scopes \
     --metadata=startup-script='#!/usr/bin/env bash
 set -euxo pipefail
 apt-get update

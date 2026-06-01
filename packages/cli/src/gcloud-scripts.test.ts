@@ -45,6 +45,7 @@ test("create script uses no service account and labels the VM", async () => {
   const content = await readFile(path.join(repoRoot, "scripts/gcloud/create-sandbox-vm.sh"), "utf8");
 
   assert.match(content, /--no-service-account/);
+  assert.match(content, /--no-scopes/);
   assert.match(content, /app=unsus/);
   assert.match(content, /purpose=sandbox/);
   assert.match(content, /ttl=manual-delete/);
