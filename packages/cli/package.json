@@ -1,0 +1,22 @@
+{
+  "name": "@unsus/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "unsus": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "test": "node --test \"dist/**/*.test.js\""
+  },
+  "dependencies": {
+    "@unsus/core": "0.0.0",
+    "@unsus/sandbox": "0.0.0"
+  }
+}
