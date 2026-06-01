@@ -1,0 +1,6 @@
+{
+  "name": "normal-package",
+  "version": "1.0.0",
+  "description": "A harmless fixture package.",
+  "main": "index.js"
+}

@@ -1,0 +1,5 @@
+{
+  "name": "network-sdk-package",
+  "version": "1.0.0",
+  "description": "A harmless SDK-style fixture containing normal network API code."
+}
