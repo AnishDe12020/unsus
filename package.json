@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc -b packages/core packages/sandbox packages/cli",
     "typecheck": "tsc -b packages/core packages/sandbox packages/cli --pretty false",
-    "test": "npm run build && node --test \"packages/*/dist/**/*.test.js\"",
+    "test": "npm run build && node scripts/run-tests.mjs",
     "lint": "tsc -b packages/core packages/sandbox packages/cli --pretty false"
   },
   "devDependencies": {

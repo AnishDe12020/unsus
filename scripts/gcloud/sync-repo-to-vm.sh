@@ -25,6 +25,7 @@ trap cleanup EXIT
 
 (
   cd "${repo_root}"
+  export COPYFILE_DISABLE=1
   tar \
     --exclude='.git' \
     --exclude='node_modules' \
