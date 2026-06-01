@@ -1,0 +1,6 @@
+{
+  "name": "synthetic-benign-network-client",
+  "version": "1.0.0",
+  "description": "Harmless fixture representing a normal HTTP client library.",
+  "main": "client.js"
+}

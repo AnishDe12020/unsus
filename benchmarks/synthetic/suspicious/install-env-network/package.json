@@ -1,0 +1,9 @@
+{
+  "name": "synthetic-suspicious-install-env-network",
+  "version": "1.0.0",
+  "description": "Harmless suspicious fixture using a fake env var name.",
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "main": "index.js"
+}

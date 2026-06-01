@@ -1,0 +1,6 @@
+{
+  "name": "synthetic-suspicious-obfuscated-eval",
+  "version": "1.0.0",
+  "description": "Harmless suspicious fixture with obfuscated dynamic code.",
+  "main": "index.js"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "synthetic-diff-package",
+  "version": "1.1.0",
+  "description": "Synthetic diff target adding suspicious install behavior.",
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "dependencies": {
+    "synthetic-helper": "1.0.0"
+  },
+  "main": "index.js"
+}

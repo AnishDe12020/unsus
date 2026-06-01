@@ -1,0 +1,9 @@
+{
+  "name": "synthetic-benign-build-script",
+  "version": "1.0.0",
+  "description": "Harmless fixture with a normal local build postinstall.",
+  "scripts": {
+    "postinstall": "node build.js"
+  },
+  "main": "index.js"
+}

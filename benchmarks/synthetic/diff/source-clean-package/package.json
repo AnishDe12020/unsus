@@ -1,0 +1,10 @@
+{
+  "name": "synthetic-source-vs-registry",
+  "version": "2.0.0",
+  "description": "Clean source-like package for synthetic provenance diff benchmark.",
+  "repository": {
+    "type": "git",
+    "url": "https://example.invalid/synthetic-source-vs-registry.git"
+  },
+  "main": "index.js"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "synthetic-diff-package",
+  "version": "1.0.0",
+  "description": "Clean baseline for synthetic diff benchmarks.",
+  "main": "index.js"
+}

@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "description": "Harmless local benchmark corpus for Unsus static and diff behavior. No real malware samples are included.",
+  "safety": {
+    "noRealMalware": true,
+    "localOnly": true,
+    "noHostLifecycleExecution": true,
+    "usesFakeSecretsOnly": true,
+    "notes": [
+      "Fixtures may contain lifecycle scripts as text, but the benchmark runner only scans and diffs them.",
+      "The fake secret name used by suspicious fixtures is FAKE_TEST_TOKEN.",
+      "Network examples use example.invalid and must not be contacted by the runner."
+    ]
+  },
+  "cases": [
+    {
+      "id": "benign-build-script",
+      "kind": "scan",
+      "target": "benchmarks/synthetic/benign/build-script-package",
+      "expectedExit": 0,
+      "expectedRisk": "low",
+      "expectedDecision": "allow",
+      "why": "A normal build postinstall that writes only a local marker if executed in a sandbox."
+    },
+    {
+      "id": "benign-network-library",
+      "kind": "scan",
+      "target": "benchmarks/synthetic/benign/network-client-library",
+      "expectedExit": 0,
+      "expectedRisk": "low",
+      "expectedDecision": "allow",
+      "why": "Network API usage in library code without install-time execution should not block by itself."
+    },
+    {
+      "id": "suspicious-install-env-network",
+      "kind": "scan",
+      "target": "benchmarks/synthetic/suspicious/install-env-network",
+      "expectedExit": 2,
+      "expectedRisk": "critical",
+      "expectedDecision": "block",
+      "why": "Install-time script plus fake credential access plus network API should block."
+    },
+    {
+      "id": "suspicious-obfuscated-eval",
+      "kind": "scan",
+      "target": "benchmarks/synthetic/suspicious/obfuscated-eval",
+      "expectedExit": 2,
+      "expectedRisk": "high",
+      "expectedDecision": "block",
+      "why": "Obfuscation feeding dynamic code execution is a high-risk behavior chain."
+    },
+    {
+      "id": "diff-new-install-env-network",
+      "kind": "diff",
+      "target": "benchmarks/synthetic/diff/new-install-env-network",
+      "against": "benchmarks/synthetic/diff/base-clean-package",
+      "expectedExit": 2,
+      "expectedRisk": "high",
+      "why": "New version adds an install script and suspicious install source."
+    },
+    {
+      "id": "diff-registry-only-payload",
+      "kind": "diff",
+      "target": "benchmarks/synthetic/diff/registry-tarball-payload",
+      "against": "benchmarks/synthetic/diff/source-clean-package",
+      "expectedExit": 2,
+      "expectedRisk": "high",
+      "why": "Registry-like package adds suspicious files absent from the clean source-like package."
+    }
+  ]
+}
