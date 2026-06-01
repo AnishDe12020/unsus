@@ -1,5 +1,6 @@
 import { formatJsonReport, formatScanText, scanTarget } from "@unsus/core";
 import type { RiskLevel } from "@unsus/core";
+import { runLifecycleScriptsInDockerSandbox } from "@unsus/sandbox";
 
 export async function runScanCommand(args: string[]): Promise<number> {
   const target = firstPositional(args);
@@ -7,8 +8,18 @@ export async function runScanCommand(args: string[]): Promise<number> {
     throw new Error("Usage: unsus scan <target> [--json] [--dynamic] [--fail-on high]");
   }
 
+  const dynamic = args.includes("--dynamic") && !args.includes("--no-dynamic");
   const result = await scanTarget(target, {
-    dynamic: args.includes("--dynamic") && !args.includes("--no-dynamic"),
+    dynamic,
+    ...(dynamic
+      ? {
+          dynamicRunner: (pkg) =>
+            runLifecycleScriptsInDockerSandbox({
+              sourceRootPath: pkg.rootPath,
+              packageJson: pkg.packageJson
+            })
+        }
+      : {}),
     ...(readOption(args, "--fail-on") ? { failOn: readOption(args, "--fail-on") as RiskLevel } : {})
   });
 

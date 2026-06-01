@@ -1,6 +1,7 @@
 export type {
   BehaviorCategory,
   Decision,
+  DynamicSandboxRunner,
   ExtractedPackage,
   Finding,
   FindingSeverity,

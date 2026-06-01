@@ -99,9 +99,12 @@ export interface SandboxResult {
   findings: Finding[];
 }
 
+export type DynamicSandboxRunner = (pkg: ExtractedPackage) => Promise<SandboxResult>;
+
 export interface ScanOptions {
   dynamic?: boolean;
   failOn?: RiskLevel;
+  dynamicRunner?: DynamicSandboxRunner;
 }
 
 export interface RiskPolicy {
