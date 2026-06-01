@@ -40,3 +40,14 @@ test("policy blocks high and critical results by default", () => {
   assert.equal(decisionFromPolicy("medium", defaultPolicy), "warn");
   assert.equal(decisionFromPolicy("low", defaultPolicy), "allow");
 });
+
+test("scoring does not block packages for accumulated documentation URLs and entropy alone", () => {
+  const noisyFindings = Array.from({ length: 30 }, (_, index) =>
+    finding(index % 2 === 0 ? "network_access" : "obfuscation", index % 2 === 0 ? "url_literal" : "high_entropy_string")
+  );
+
+  const score = calculateRiskScore(noisyFindings);
+
+  assert.equal(riskLevelFromScore(score), "low");
+  assert.equal(decisionFromPolicy(riskLevelFromScore(score), defaultPolicy), "allow");
+});

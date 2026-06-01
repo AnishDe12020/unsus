@@ -15,45 +15,65 @@ export function calculateRiskScore(findings: Finding[]): number {
 
   const categories = new Set(findings.map((finding) => finding.category));
   const types = new Set(findings.map((finding) => finding.type));
+  const hasNetworkBehavior = types.has("network_api") || types.has("ip_literal");
+  const hasOnlyLowSignalNoise = findings.every((finding) =>
+    ["url_literal", "high_entropy_string", "network_detection_unsupported", "wallet_like_literal"].includes(finding.type)
+  );
+  let chainTriggered = false;
 
-  if (categories.has("install_time_execution") && categories.has("network_access")) {
+  if (categories.has("install_time_execution") && hasNetworkBehavior) {
     score = Math.max(score, 7.4);
+    chainTriggered = true;
   }
 
   if (categories.has("install_time_execution") && categories.has("code_execution")) {
     score = Math.max(score, 7.6);
+    chainTriggered = true;
   }
 
   if (
     categories.has("install_time_execution") &&
     categories.has("credential_access") &&
-    categories.has("network_access")
+    hasNetworkBehavior
   ) {
     score = Math.max(score, 9.2);
+    chainTriggered = true;
   }
 
   if (categories.has("obfuscation") && categories.has("dynamic_code_execution")) {
     score = Math.max(score, 8.0);
+    chainTriggered = true;
   }
 
-  if (categories.has("obfuscation") && (categories.has("code_execution") || categories.has("network_access"))) {
+  if (categories.has("obfuscation") && (categories.has("code_execution") || hasNetworkBehavior)) {
     score = Math.max(score, 9.0);
+    chainTriggered = true;
   }
 
-  if (types.has("credential_file_access") && categories.has("network_access")) {
+  if (types.has("credential_file_access") && hasNetworkBehavior) {
     score = Math.max(score, 9.1);
+    chainTriggered = true;
   }
 
   if (types.has("new_dependency_with_lifecycle_script")) {
     score = Math.max(score, 7.5);
+    chainTriggered = true;
   }
 
   if (categories.has("typosquat") && categories.has("install_time_execution")) {
     score = Math.max(score, 7.8);
+    chainTriggered = true;
   }
 
   if (categories.has("binary_payload") && categories.has("install_time_execution")) {
     score = Math.max(score, 9.3);
+    chainTriggered = true;
+  }
+
+  if (!chainTriggered && hasOnlyLowSignalNoise) {
+    score = Math.min(score, 2.5);
+  } else if (!chainTriggered && !findings.some((finding) => finding.severity === "danger" || finding.severity === "critical")) {
+    score = Math.min(score, 4.0);
   }
 
   return Math.min(10, Number(score.toFixed(1)));
