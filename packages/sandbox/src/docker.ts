@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { access, cp, mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import { chmod, cp, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -106,6 +106,7 @@ export async function runLifecycleScriptsInDockerSandbox(options: LifecycleSandb
 
   try {
     await copyWorkspace(options.sourceRootPath, workspacePath);
+    await makeWorkspaceWritable(workspacePath);
     let before = await snapshotWorkspace(workspacePath);
     let finalExitCode = 0;
     let timedOut = false;
@@ -264,6 +265,26 @@ async function copyWorkspace(sourceRootPath: string, workspacePath: string): Pro
     recursive: true,
     filter: (source) => !SKIP_DIRS.has(path.basename(source))
   });
+}
+
+async function makeWorkspaceWritable(rootPath: string): Promise<void> {
+  async function walk(currentPath: string): Promise<void> {
+    const currentStat = await stat(currentPath);
+    if (currentStat.isDirectory()) {
+      await chmod(currentPath, 0o777);
+      const entries = await readdir(currentPath, { withFileTypes: true });
+      for (const entry of entries) {
+        await walk(path.join(currentPath, entry.name));
+      }
+      return;
+    }
+
+    if (currentStat.isFile()) {
+      await chmod(currentPath, 0o666);
+    }
+  }
+
+  await walk(rootPath);
 }
 
 interface SnapshotEntry {

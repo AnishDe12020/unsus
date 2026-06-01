@@ -37,6 +37,8 @@ test("runLifecycleScriptsInDockerSandbox uses copied workspace and records file 
     },
     dockerExecutor: async (args) => {
       const workspacePath = workspacePathFromArgs(args);
+      const workspaceStat = await import("node:fs/promises").then((fs) => fs.stat(workspacePath));
+      assert.equal(workspaceStat.mode & 0o777, 0o777);
       await import("node:fs/promises").then((fs) =>
         fs.writeFile(path.join(workspacePath, "build-marker.txt"), "created in temp workspace\n")
       );
