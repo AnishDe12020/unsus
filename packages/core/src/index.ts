@@ -36,3 +36,7 @@ export {
   defaultPolicy,
   riskLevelFromScore
 } from "./scoring/score.js";
+export { analyzePackage, scanExtractedPackage, scanTarget } from "./scan.js";
+export { compareExtractedPackages, diffTargets } from "./diff/version-diff.js";
+export { formatJsonReport } from "./report/json.js";
+export { formatDiffText, formatScanText } from "./report/text.js";
