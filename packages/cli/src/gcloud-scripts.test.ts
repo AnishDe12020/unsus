@@ -13,6 +13,8 @@ const scripts = [
   "scripts/gcloud/sync-repo-to-vm.sh",
   "scripts/gcloud/run-fixture-on-vm.sh",
   "scripts/gcloud/run-remote-npm-on-vm.sh",
+  "scripts/gcloud/check-malware-readiness.sh",
+  "scripts/gcloud/run-malicious-samples-on-vm.sh",
   "scripts/gcloud/status-sandbox-vm.sh"
 ];
 
@@ -100,6 +102,48 @@ test("status script inspects only the configured VM", async () => {
 
   assert.match(content, /gcloud compute instances describe "\$\{vm_name\}"/);
   assert.doesNotMatch(content, /instances list/);
+});
+
+test("malware readiness script checks disposable VM constraints without creating resources", async () => {
+  const content = await readFile(path.join(repoRoot, "scripts/gcloud/check-malware-readiness.sh"), "utf8");
+
+  assert.match(content, /serviceAccounts/);
+  assert.match(content, /purpose=sandbox/);
+  assert.match(content, /status.*RUNNING/);
+  assert.match(content, /docker --version/);
+  assert.match(content, /packages\/cli\/dist\/index\.js/);
+  assert.doesNotMatch(content, /compute instances create/);
+  assert.doesNotMatch(content, /auth login/);
+});
+
+test("malicious sample runner requires exact opt-in, manifest input, readiness, and cleanup guidance", async () => {
+  const content = await readFile(path.join(repoRoot, "scripts/gcloud/run-malicious-samples-on-vm.sh"), "utf8");
+
+  assert.match(content, /UNSUS_REAL_MALWARE_TESTING/);
+  assert.match(content, /I_ACCEPT_REAL_MALWARE_RISK/);
+  assert.match(content, /UNSUS_MALWARE_SAMPLE_MANIFEST/);
+  assert.match(content, /check-malware-readiness\.sh/);
+  assert.match(content, /--allow-remote-dynamic/);
+  assert.match(content, /docker pull node:22-bookworm-slim/);
+  assert.match(content, /destroy-sandbox-vm\.sh/);
+  assert.match(content, /tar -czf \/tmp\/unsus-gcloud-malware-lab-logs\.tar\.gz/);
+  assert.doesNotMatch(content, /npm install <random package>/);
+  assert.doesNotMatch(content, /gcloud auth login/);
+});
+
+test("malware lab docs define the real-payload safety gate", async () => {
+  const docs = [
+    await readFile(path.join(repoRoot, "docs/malicious-payload-testing.md"), "utf8"),
+    await readFile(path.join(repoRoot, "docs/gcloud-sandbox.md"), "utf8"),
+    await readFile(path.join(repoRoot, "scripts/gcloud/README.md"), "utf8")
+  ].join("\n");
+
+  assert.match(docs, /real malicious/i);
+  assert.match(docs, /UNSUS_REAL_MALWARE_TESTING=I_ACCEPT_REAL_MALWARE_RISK/);
+  assert.match(docs, /UNSUS_MALWARE_SAMPLE_MANIFEST/);
+  assert.match(docs, /destroy-sandbox-vm\.sh/);
+  assert.match(docs, /no host secrets/i);
+  assert.match(docs, /not.*host/i);
 });
 
 function escapeRegExp(value: string): string {

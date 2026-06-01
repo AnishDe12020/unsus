@@ -10,6 +10,8 @@ No host secrets are copied. No real malware should be used. Remote npm dynamic a
 - `sync-repo-to-vm.sh`: copies this repo to the VM using a tar archive with credential exclusions, then runs `npm install --ignore-scripts`, `npm run typecheck`, and `npm test`.
 - `run-fixture-on-vm.sh`: runs only harmless local fixture dynamic scans and copies output logs to `artifacts/gcloud-sandbox/`.
 - `run-remote-npm-on-vm.sh`: opt-in remote npm dynamic scan. Fetches on the VM only and is still for benign package checks, not real malware.
+- `check-malware-readiness.sh`: verifies the configured disposable VM before real malicious payload testing.
+- `run-malicious-samples-on-vm.sh`: explicit, manifest-driven real malicious sample runner for reviewed npm package specs.
 - `status-sandbox-vm.sh`: describes only the configured VM.
 - `destroy-sandbox-vm.sh`: deletes only the configured VM after confirmation.
 
@@ -51,4 +53,14 @@ export UNSUS_ALLOW_REMOTE_NPM_DYNAMIC=1
 ./scripts/gcloud/run-remote-npm-on-vm.sh
 ```
 
-Do not use real malware here yet. Remote npm dynamic analysis is still an explicit opt-in workflow.
+Do not use real malware in the benign remote npm workflow. Real malicious payload testing requires:
+
+```bash
+export UNSUS_MALWARE_SAMPLE_MANIFEST="artifacts/malware-lab/samples.json"
+export UNSUS_REAL_MALWARE_TESTING=I_ACCEPT_REAL_MALWARE_RISK
+./scripts/gcloud/check-malware-readiness.sh
+./scripts/gcloud/run-malicious-samples-on-vm.sh
+./scripts/gcloud/destroy-sandbox-vm.sh
+```
+
+See `docs/malicious-payload-testing.md`. No host secrets are copied, and payload lifecycle code must not run on the host.

@@ -6,7 +6,7 @@ Use this workflow when local Docker or OrbStack is unavailable and you need to r
 
 Dynamic package behavior should not execute on the developer host. The VM is disposable, can be deleted after a test run, and keeps host files away from Docker lifecycle execution.
 
-This is still not a malware lab. No real malware should be used in this workflow.
+This is still not a malware lab by default. Real malicious payload testing requires the separate readiness gate in `docs/malicious-payload-testing.md`.
 
 ## What Gets Copied
 
@@ -45,7 +45,7 @@ node packages/cli/dist/index.js scan fixtures/benign/install-script-build-packag
 
 Package lifecycle execution still happens inside Docker on the VM. The Docker container uses no network, dropped capabilities, resource limits, a PID limit, tmpfs, and sanitized fake environment variables.
 
-Remote npm dynamic analysis is not enabled yet. Do not use this flow for real suspicious packages or real malware.
+Remote npm dynamic analysis is opt-in. Do not use this basic flow for real malicious packages; use the real-payload readiness workflow instead.
 
 ## Opt-In Benign Remote Npm Scan
 
@@ -90,6 +90,14 @@ gcloud compute instances create --help
 
 Do not run `gcloud auth login` inside the VM. Do not copy local `~/.config/gcloud` into the VM.
 
-## Later Remote Npm Dynamic Analysis
+## Real Malicious Payload Testing
 
-A later phase can add curated malicious sample handling with stronger artifact hygiene and review gates. That should still fetch packages inside the VM, avoid host secrets, keep Docker no-network lifecycle execution, and require explicit review before enabling real package samples.
+Real malicious payload testing is gated behind:
+
+- `./scripts/gcloud/check-malware-readiness.sh`
+- `UNSUS_MALWARE_SAMPLE_MANIFEST`
+- `UNSUS_REAL_MALWARE_TESTING=I_ACCEPT_REAL_MALWARE_RISK`
+- `./scripts/gcloud/run-malicious-samples-on-vm.sh`
+- immediate cleanup with `./scripts/gcloud/destroy-sandbox-vm.sh`
+
+See `docs/malicious-payload-testing.md`. No host secrets should be copied, and real payload lifecycle code must not run on the host.
