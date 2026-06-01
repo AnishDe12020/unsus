@@ -12,6 +12,9 @@ export function formatScanText(result: ScanResult): string {
   ];
 
   lines.push(...formatFindings(result.findings));
+  if (result.sandbox) {
+    lines.push("", "Sandbox timeline:", ...formatSandboxTimeline(result));
+  }
   lines.push("", "Recommendation:", ...recommendations(result));
   return `${lines.join("\n")}\n`;
 }
@@ -58,4 +61,30 @@ function recommendations(result: ScanResult): string[] {
   }
 
   return ["- Install may proceed under the current policy."];
+}
+
+function formatSandboxTimeline(result: ScanResult): string[] {
+  const sandbox = result.sandbox;
+  if (!sandbox) {
+    return [];
+  }
+
+  const lines = [
+    `- enabled: ${sandbox.enabled}`,
+    `- timed out: ${sandbox.timedOut}`
+  ];
+
+  if (typeof sandbox.exitCode === "number") {
+    lines.push(`- exit code: ${sandbox.exitCode}`);
+  }
+
+  if (sandbox.timeline.length === 0) {
+    lines.push("- no sandbox events recorded");
+    return lines;
+  }
+
+  return [
+    ...lines,
+    ...sandbox.timeline.map((event) => `- ${event.timeMs}ms: ${event.message}`)
+  ];
 }
