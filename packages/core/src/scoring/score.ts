@@ -16,6 +16,7 @@ export function calculateRiskScore(findings: Finding[]): number {
   const categories = new Set(findings.map((finding) => finding.category));
   const types = new Set(findings.map((finding) => finding.type));
   const hasNetworkBehavior = types.has("network_api") || types.has("ip_literal");
+  const denseSourceObfuscation = detectDenseSourceObfuscation(findings);
   const hasOnlyLowSignalNoise = findings.every((finding) =>
     ["url_literal", "high_entropy_string", "network_detection_unsupported", "wallet_like_literal"].includes(finding.type)
   );
@@ -47,6 +48,14 @@ export function calculateRiskScore(findings: Finding[]): number {
 
   if (categories.has("obfuscation") && (categories.has("code_execution") || hasNetworkBehavior)) {
     score = Math.max(score, 9.0);
+    chainTriggered = true;
+  }
+
+  if (
+    denseSourceObfuscation.blockAlone ||
+    (categories.has("install_time_execution") && denseSourceObfuscation.installTimeChain)
+  ) {
+    score = Math.max(score, categories.has("install_time_execution") ? 8.2 : 7.2);
     chainTriggered = true;
   }
 
@@ -114,4 +123,66 @@ function severityPoints(severity: Finding["severity"]): number {
     case "critical":
       return 4.0;
   }
+}
+
+interface DenseSourceObfuscation {
+  blockAlone: boolean;
+  installTimeChain: boolean;
+}
+
+function detectDenseSourceObfuscation(findings: Finding[]): DenseSourceObfuscation {
+  const highEntropySourceFindings = findings.filter((finding) => {
+    if (finding.type !== "high_entropy_string" || !finding.file) {
+      return false;
+    }
+
+    if (isLowSignalMetadataOrDocPath(finding.file)) {
+      return false;
+    }
+
+    return true;
+  });
+
+  if (highEntropySourceFindings.length < 5) {
+    return { blockAlone: false, installTimeChain: false };
+  }
+
+  const hasLargePayload = highEntropySourceFindings.some((finding) => {
+    const length = numericEvidence(finding, "length");
+    const entropy = numericEvidence(finding, "entropy");
+    return length >= 500 && entropy >= 5;
+  });
+
+  const totalLength = highEntropySourceFindings.reduce((sum, finding) => sum + numericEvidence(finding, "length"), 0);
+  const averageEntropy =
+    highEntropySourceFindings.reduce((sum, finding) => sum + numericEvidence(finding, "entropy"), 0) /
+    highEntropySourceFindings.length;
+  const hasHighEntropyAggregate = totalLength >= 1000 && averageEntropy >= 5;
+  const hasLargeInstallTimeAggregate =
+    highEntropySourceFindings.length >= 20 && totalLength >= 2000 && averageEntropy >= 4.5;
+
+  return {
+    blockAlone: hasLargePayload || hasHighEntropyAggregate,
+    installTimeChain: hasLargePayload || hasHighEntropyAggregate || hasLargeInstallTimeAggregate
+  };
+}
+
+function isLowSignalMetadataOrDocPath(filePath: string): boolean {
+  return (
+    /^package\.json$/i.test(filePath) ||
+    /(^|\/)(readme|license|licence|changelog|changes|history|notice)(\.|$)/i.test(filePath)
+  );
+}
+
+function numericEvidence(finding: Finding, key: string): number {
+  const value = finding.evidence?.[key];
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim() !== "") {
+    return Number(value);
+  }
+
+  return 0;
 }
