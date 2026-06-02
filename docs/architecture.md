@@ -15,4 +15,15 @@ The core package is intentionally usable from Node-compatible runtimes. Bun can 
 3. Core extracts into a temporary directory and collects bounded file contents.
 4. Pure analyzers emit behavioral findings.
 5. Scoring converts behavior chains into allow, warn, or block decisions.
-6. `unsus install` delegates to the selected package manager only after the scan decision permits it or the user forces an override.
+6. If `--dynamic` is enabled and a sandbox runner is configured, lifecycle scripts execute only inside a hardened Docker container and produce a timeline.
+7. `unsus install` delegates to the selected package manager only after the scan decision permits it or the user forces an override.
+
+## Research Scripts
+
+Research helpers under `scripts/research/` are intentionally outside the core product packages. They support real-world test sourcing by:
+
+- building npm candidate lists from the DataDog malicious package dataset manifest;
+- checking live npm metadata availability without downloading tarballs;
+- producing ignored manifests for the disposable GCloud runner.
+
+They must not extract malicious sample archives, fetch npm tarballs locally, or execute package code.

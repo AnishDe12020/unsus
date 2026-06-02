@@ -2,7 +2,7 @@
 
 These scripts create and use a disposable Google Cloud VM for `unsus` dynamic sandbox testing when local Docker is unavailable.
 
-No host secrets are copied. No real malware should be used. Remote npm dynamic analysis is intentionally not enabled yet.
+No host secrets are copied. No real malware is used in fixture or benign remote npm validation flows. Real malicious package testing is available only through the explicit manifest-driven readiness workflow.
 
 ## Files
 
@@ -64,3 +64,20 @@ export UNSUS_REAL_MALWARE_TESTING=I_ACCEPT_REAL_MALWARE_RISK
 ```
 
 See `docs/malicious-payload-testing.md`. No host secrets are copied, and payload lifecycle code must not run on the host.
+
+## DataDog Candidate Flow
+
+The DataDog dataset helper runs locally but reads metadata only:
+
+```bash
+npm run samples:datadog-npm -- \
+  --output artifacts/malware-lab/datadog/npm-candidates.json \
+  --limit 200
+
+npm run samples:check-npm -- \
+  --input artifacts/malware-lab/datadog/npm-candidates.json \
+  --output artifacts/malware-lab/datadog/npm-available.json \
+  --json
+```
+
+Use the generated availability manifest with `run-malicious-samples-on-vm.sh` only after reviewing the package specs.

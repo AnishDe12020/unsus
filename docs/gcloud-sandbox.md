@@ -47,6 +47,8 @@ Package lifecycle execution still happens inside Docker on the VM. The Docker co
 
 Remote npm dynamic analysis is opt-in. Do not use this basic flow for real malicious packages; use the real-payload readiness workflow instead.
 
+The remote npm and real-payload runners fetch package metadata/tarballs on the VM. The host sends package specs/manifests and receives scanner logs; it does not download package tarballs first and transfer them.
+
 ## Opt-In Benign Remote Npm Scan
 
 After the fixture workflow passes, `run-remote-npm-on-vm.sh` can run a benign npm package scan entirely from the VM:

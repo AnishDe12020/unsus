@@ -7,7 +7,7 @@
 - Never run suspicious `npm install`, `bun add`, or `pnpm add` commands directly on the host.
 - Never execute lifecycle scripts from unknown packages on the host.
 - Fetch npm tarballs for analysis only; extraction must not execute package scripts.
-- Do not use real malware samples.
+- Do not use real malware samples in automated tests or on the host.
 - Do not read, print, store, or pass through real host secrets.
 - Do not contact suspicious domains or URLs.
 
@@ -30,8 +30,14 @@ Dynamic analysis must run only inside Docker with:
 - no home directory, SSH, npm, GitHub, or cloud config mounts
 - sanitized environment variables
 
-Current implementation note: Docker hardening arguments are implemented and tested, but lifecycle script execution and timeline capture are not yet wired into CLI scans or installs.
+Current implementation note: local `scan --dynamic` can execute detected lifecycle scripts inside Docker and return a sandbox timeline. Remote npm dynamic scans and real malicious package benchmarks must run through the disposable GCloud workflow.
 
 ## When to Use Cloud VMs
 
 Stop and request a cloud VM plan before testing real suspicious packages, unknown malware-like samples, internet-observed hostile payloads, or anything that requires networked dynamic analysis.
+
+The current VM path is documented in:
+
+- `docs/gcloud-sandbox.md`
+- `docs/malicious-payload-testing.md`
+- `docs/real-world-sample-sourcing.md`

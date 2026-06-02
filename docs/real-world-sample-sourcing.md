@@ -93,6 +93,8 @@ npm run samples:check-npm -- \
 
 The DataDog builder reads only `manifest.json`. It does not extract `samples/`, does not use the ZIP password, does not download npm tarballs, and does not execute package code.
 
+As of the latest local spot check, the DataDog npm manifest contained tens of thousands of npm entries, but most exact malicious versions sampled from live npm had already been removed. Sampling offsets across the exact-version list found `cline@2.3.0` as one live candidate. Treat this as a point-in-time observation; rerun the metadata availability check before any benchmark.
+
 ## Future Work
 
 - Add a VM-only runner for quarantined tarballs.
