@@ -2,19 +2,19 @@
 
 Inspect an npm package before installing it, and keep installation scripts off.
 
-`unsus` is a heuristic scanner and guarded npm installer. The v0.1 release candidate scans a **direct package**, verifies its registry archive, and installs those exact bytes with `npm --ignore-scripts`. It does not certify that a package is safe, scan the dependency graph, or protect you when you later import or execute installed code.
+`unsus` is a heuristic scanner and guarded npm installer. The v0.2 preview scans a **direct package**, verifies its registry archive, and installs those exact bytes with `npm --ignore-scripts`. It does not certify that a package is safe, scan the dependency graph, or protect you when you later import or execute installed code.
 
 ## Download the compiled CLI
 
-Download `unsus-0.1.0.tar.gz` and its `.sha256` file from [GitHub Releases](https://github.com/AnishDe12020/unsus/releases). Requires **Node.js 22+**; the kit includes compiled code and runtime dependencies, so no build or npm package publication is needed.
+Download `unsus-0.2.0.tar.gz` and its `.sha256` file from [GitHub Releases](https://github.com/AnishDe12020/unsus/releases). Requires **Node.js 22+**; the kit includes compiled code and runtime dependencies, so no build or npm package publication is needed.
 
 ```sh
-shasum -a 256 -c unsus-0.1.0.tar.gz.sha256
-tar -xzf unsus-0.1.0.tar.gz
-./unsus-0.1.0/bin/unsus --help
+shasum -a 256 -c unsus-0.2.0.tar.gz.sha256
+tar -xzf unsus-0.2.0.tar.gz
+./unsus-0.2.0/bin/unsus --help
 ```
 
-On Windows, extract the archive and run `node unsus-0.1.0/bin/unsus --help`. On macOS/Linux, move the whole extracted directory somewhere permanent and add its `bin` directory to `PATH`, or symlink `bin/unsus` into a directory already on `PATH`. Keep the entire kit together. Local static scans work offline; registry scans need network access, guarded installs also need npm, and dynamic observation needs Docker.
+On Windows, extract the archive and run `node unsus-0.2.0/bin/unsus --help`. On macOS/Linux, move the whole extracted directory somewhere permanent and add its `bin` directory to `PATH`, or symlink `bin/unsus` into a directory already on `PATH`. Keep the entire kit together. Local static scans work offline; registry scans need network access, guarded installs also need npm, and dynamic observation needs Docker.
 
 ## Try it from source
 
@@ -29,7 +29,7 @@ node packages/cli/dist/index.js --help
 node packages/cli/dist/index.js scan fixtures/benign/normal-package --json
 ```
 
-The publishable packages are `@unsus/core`, `@unsus/sandbox`, and `@unsus/cli`, version `0.1.0`. npm registry publication is a separate step; the downloadable kit works without it. `npm run package:release` writes a verified archive and SHA-256 file to `artifacts/release/`. `npm run verify:release` exercises the same build in a temporary directory. Both pack all three workspaces, install their locked runtime dependency versions with scripts disabled, then verify the extracted kit. Neither publishes anything.
+The publishable packages are `@unsus/core`, `@unsus/sandbox`, and `@unsus/cli`, version `0.2.0`. npm registry publication is a separate step; the downloadable kit works without it. `npm run package:release` writes a verified archive and SHA-256 file to `artifacts/release/`. `npm run verify:release` exercises the same build in a temporary directory. Both pack all three workspaces, install their locked runtime dependency versions with scripts disabled, then verify the extracted kit. Neither publishes anything.
 
 To use the checkout's CLI in another project, invoke its absolute path:
 
@@ -124,4 +124,4 @@ npm run verify:release
 
 Tests include a loopback registry and a real npm install with harmless root, direct and transitive lifecycle markers; none may execute. They also cover tampered archives, missing checksums, extraction limits, symbolic links and package identity mismatches. Synthetic benchmark scores describe these fixtures only, not real-world detection rates.
 
-Historical research and disposable-lab documentation remains under `docs/` and `scripts/research/`; it is separate from the v0.1 product path and is not needed for onboarding. Do not fetch or execute real malicious samples on a development machine.
+Historical research and disposable-lab documentation remains under `docs/` and `scripts/research/`; it is separate from the v0.2 product path and is not needed for onboarding. Do not fetch or execute real malicious samples on a development machine.

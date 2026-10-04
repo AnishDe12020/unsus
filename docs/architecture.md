@@ -25,4 +25,4 @@ The archive remains a relative `file:` dependency in the project's manifest and 
 
 ## Research scripts
 
-`docs/` and `scripts/research/` also contain historical sample-sourcing and disposable-lab workflows. They are outside the v0.1 product path. Research helpers build candidate lists and check metadata availability; they must not extract or execute malicious samples on a development machine.
+`docs/` and `scripts/research/` also contain historical sample-sourcing and disposable-lab workflows. They are outside the v0.2 product path. Research helpers build candidate lists and check metadata availability; they must not extract or execute malicious samples on a development machine.

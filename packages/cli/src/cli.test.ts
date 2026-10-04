@@ -10,7 +10,7 @@ const cliPath = path.join(repoRoot, "packages/cli/dist/index.js");
 test("version and command help work without resolving packages or installing anything", () => {
   const version = spawnSync(process.execPath, [cliPath, "--version"], { encoding: "utf8" });
   assert.equal(version.status, 0, version.stderr);
-  assert.match(version.stdout, /^0\.1\.0\n$/);
+  assert.match(version.stdout, /^0\.2\.0\n$/);
   for (const command of ["scan", "diff", "install", "project", "explain"]) {
     const help = spawnSync(process.execPath, [cliPath, command, "--help"], { encoding: "utf8" });
     assert.equal(help.status, 0, help.stderr);

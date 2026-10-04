@@ -1,6 +1,6 @@
 # Threat model
 
-The v0.1 product inspects a direct npm package before installation and keeps lifecycle scripts disabled during a guarded npm install. It aims to expose suspicious package behavior for review; it does not certify packages or provide complete host protection.
+The v0.2 product inspects a direct npm package before installation and keeps lifecycle scripts disabled during a guarded npm install. It aims to expose suspicious package behavior for review; it does not certify packages or provide complete host protection.
 
 ## What it handles
 
