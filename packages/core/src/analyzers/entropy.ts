@@ -25,6 +25,7 @@ export function analyzeEntropy(pkg: ExtractedPackage): Finding[] {
     for (const literal of literals) {
       const value = literal.value;
       if (value.length >= 40 && shannonEntropy(value) >= 4.2) {
+        const dataShape = file.kind === "source" ? tableShape(value) : undefined;
         findings.push(
           createFinding({
             category: "obfuscation",
@@ -35,7 +36,8 @@ export function analyzeEntropy(pkg: ExtractedPackage): Finding[] {
             file: file.path,
             line: lineForOffset(file.content, literal.start),
             code: value.slice(0, 96),
-            evidence: { length: value.length, entropy: Number(shannonEntropy(value).toFixed(2)) },
+            evidence: { length: value.length, entropy: Number(shannonEntropy(value).toFixed(2)),
+              ...(dataShape ? { dataShape } : {}) },
             confidence: 0.7
           })
         );
@@ -79,4 +81,22 @@ export function shannonEntropy(value: string): number {
 
 function isLikelyMinifiedVendor(filePath: string, content: string): boolean {
   return /\.min\.[cm]?js$/i.test(filePath) || (content.length > 50000 && content.split("\n").length < 20);
+}
+
+/** Shape evidence only, never a declaration that the value or its consumer is safe. */
+function tableShape(value: string): "unicode_ranges" | "word_table" | undefined {
+  if (value.length >= 128 && /^[^\x00-\x7f-]+(?:-[^\x00-\x7f-]+)+$/u.test(value)) {
+    const chars = [...value];
+    let ranges = 0;
+    const valid = chars.every((char, i) => {
+      if (char !== "-") return true;
+      ranges++;
+      return chars[i - 1]!.codePointAt(0)! < chars[i + 1]!.codePointAt(0)!;
+    });
+    if (valid && ranges >= 8) return "unicode_ranges";
+  }
+  const words = value.trim().split(/\s+/);
+  // Every token must fit: adding a short word prefix cannot exempt a long payload.
+  if (words.length >= 8 && new Set(words).size >= 8 && words.every(word => /^[A-Za-z][A-Za-z_]{1,31}$/.test(word))) return "word_table";
+  return undefined;
 }
