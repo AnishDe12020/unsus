@@ -14,34 +14,52 @@ import type { ExtractedPackage, Finding, SandboxResult, ScanOptions, ScanResult 
 export async function scanTarget(target: string, options: ScanOptions = {}): Promise<ScanResult> {
   const extracted = await resolveTarget(target);
   try {
-    const result = scanExtractedPackage(extracted, options);
-    const sandbox = await maybeRunDynamicSandbox(extracted, options);
-    if (!sandbox) {
-      return result;
-    }
-
-    const findings = [...result.findings, ...sandbox.findings];
-    const riskScore = calculateRiskScore(findings);
-    const riskLevel = riskLevelFromScore(riskScore);
-    return {
-      ...result,
-      findings,
-      riskScore,
-      riskLevel,
-      decision: decisionFromPolicy(riskLevel, {
-        ...defaultPolicy,
-        ...(options.failOn ? { failOn: options.failOn } : {})
-      }),
-      sandbox,
-      summary: summarizeFindings(findings)
-    };
+    return await scanPackage(extracted, options);
   } finally {
     await extracted.cleanup?.();
   }
 }
 
+/** Scan an already-resolved package without releasing its archive. Caller owns cleanup. */
+export async function scanPackage(extracted: ExtractedPackage, options: ScanOptions = {}): Promise<ScanResult> {
+  const result = scanExtractedPackage(extracted, options);
+  const sandbox = await maybeRunDynamicSandbox(extracted, options);
+  if (!sandbox) return result;
+
+  const findings = [...result.findings, ...sandbox.findings];
+  const riskScore = calculateRiskScore(findings);
+  const riskLevel = riskLevelFromScore(riskScore);
+  const decision = decisionFromPolicy(riskLevel, {
+    ...defaultPolicy,
+    ...(options.failOn ? { failOn: options.failOn } : {})
+  });
+  return {
+    ...result,
+    findings,
+    riskScore,
+    riskLevel,
+    decision: decision === "allow" && result.coverage?.complete === false ? "warn" : decision,
+    sandbox,
+    summary: summarizeFindings(findings)
+  };
+}
+
 export function scanExtractedPackage(pkg: ExtractedPackage, options: ScanOptions = {}): ScanResult {
   const findings = analyzePackage(pkg);
+  const omittedTextFiles = pkg.files
+    .filter((file) => ["source", "json", "text"].includes(file.kind) && file.content === undefined)
+    .map((file) => file.path);
+  if (omittedTextFiles.length) {
+    findings.push({
+      id: "coverage.incomplete",
+      category: "metadata_anomaly",
+      type: "incomplete_coverage",
+      severity: "warning",
+      title: "Incomplete text analysis",
+      message: `${omittedTextFiles.length} text file(s) exceed the read limit or contain binary data.`,
+      confidence: 1
+    });
+  }
   const riskScore = calculateRiskScore(findings);
   const riskLevel = riskLevelFromScore(riskScore);
   const decision = decisionFromPolicy(riskLevel, {
@@ -53,7 +71,20 @@ export function scanExtractedPackage(pkg: ExtractedPackage, options: ScanOptions
     package: pkg.identity,
     riskScore,
     riskLevel,
-    decision,
+    decision: decision === "allow" && omittedTextFiles.length ? "warn" : decision,
+    coverage: {
+      scope: "direct-package",
+      complete: omittedTextFiles.length === 0,
+      files: pkg.files.length,
+      textFilesAnalyzed: pkg.files.filter((file) => file.content !== undefined).length,
+      omittedTextFiles,
+      dependenciesAnalyzed: false,
+      limitations: [
+        "Heuristic analysis; a low score is not proof of safety.",
+        "Transitive dependencies, runtime behavior, and unknown file formats are not analyzed.",
+        "Local scans skip .git, node_modules, and symbolic links."
+      ]
+    },
     findings,
     summary: summarizeFindings(findings),
     generatedAt: new Date().toISOString(),
@@ -138,7 +169,7 @@ function looksLikeLocalPath(target: string): boolean {
 
 function summarizeFindings(findings: Finding[]): string {
   if (findings.length === 0) {
-    return "No risky package behavior detected.";
+    return "No matching risk signals found in analyzed files; safety is not established.";
   }
 
   const criticalOrDanger = findings.filter((finding) => finding.severity === "critical" || finding.severity === "danger");

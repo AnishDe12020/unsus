@@ -3,8 +3,15 @@ import type { RiskLevel } from "@unsus/core";
 import { runLifecycleScriptsInDockerSandbox } from "@unsus/sandbox";
 
 export async function runScanCommand(args: string[]): Promise<number> {
-  const target = firstPositional(args);
-  if (!target) {
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]!;
+    if (arg === "--fail-on") {
+      if (!["safe", "low", "medium", "high", "critical"].includes(args[++index] ?? "")) throw new Error("--fail-on requires safe, low, medium, high, or critical.");
+    } else if (arg.startsWith("-") && !["--json", "--dynamic", "--no-dynamic", "--allow-remote-dynamic"].includes(arg)) throw new Error(`Unknown scan option: ${arg}`);
+  }
+  const targets = positionalArguments(args);
+  const target = targets[0];
+  if (targets.length !== 1 || !target) {
     throw new Error("Usage: unsus scan <target> [--json] [--dynamic] [--fail-on high]");
   }
 
@@ -25,6 +32,7 @@ export async function runScanCommand(args: string[]): Promise<number> {
   });
 
   process.stdout.write(args.includes("--json") ? formatJsonReport(result) : formatScanText(result));
+  if (dynamic && !result.sandbox?.enabled) return 3;
   if (result.decision === "block") {
     return 2;
   }
@@ -37,7 +45,18 @@ export async function runScanCommand(args: string[]): Promise<number> {
 }
 
 export function firstPositional(args: string[]): string | undefined {
-  return args.find((arg, index) => !arg.startsWith("-") && (index === 0 || !args[index - 1]?.startsWith("--")));
+  return positionalArguments(args)[0];
+}
+
+export function positionalArguments(args: string[]): string[] {
+  const targets: string[] = [];
+  const values = new Set(["--fail-on", "--against", "--pm", "--registry"]);
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]!;
+    if (values.has(arg)) { index++; continue; }
+    if (!arg.startsWith("-")) targets.push(arg);
+  }
+  return targets;
 }
 
 export function readOption(args: string[], name: string): string | undefined {

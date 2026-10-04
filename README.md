@@ -1,92 +1,77 @@
 # unsus
 
-Install dependencies like they're guilty until proven boring.
+Inspect an npm package before installing it, and keep installation scripts off.
 
-`unsus` is a local package firewall for developers, CI, and AI coding agents. It pre-checks npm packages before real package manager installs can run dependency lifecycle scripts on the host machine.
+`unsus` is a heuristic scanner and guarded npm installer. The v0.1 release candidate scans a **direct package**, verifies its registry archive, and installs those exact bytes with `npm --ignore-scripts`. It does not certify that a package is safe, scan the dependency graph, or protect you when you later import or execute installed code.
 
-## Safety Model
+## Try it from source
 
-- Unknown package install scripts are never executed on the host by `unsus`.
-- Registry packages are fetched as metadata and tarballs, then extracted without running lifecycle scripts.
-- Dynamic checks are opt-in for scans and must run in a Docker sandbox with no network and a sanitized environment.
-- Automated tests use harmless synthetic fixtures only. Real malicious package benchmarking is a manual GCloud workflow with explicit opt-in.
-- `unsus install` scans before delegating to `npm`, `bun`, or `pnpm`.
+Requires Node.js 22 or newer and npm. Docker is needed only for optional dynamic observation.
 
-## Current Status
+```sh
+git clone https://github.com/AnishDe12020/unsus.git
+cd unsus
+npm ci --ignore-scripts
+npm run build
+node packages/cli/dist/index.js --help
+node packages/cli/dist/index.js scan fixtures/benign/normal-package --json
+```
 
-This repository is a clean production-quality rewrite. The current vertical slice supports local and npm package scanning, safe npm tarball extraction, static behavioral analyzers, risk scoring, version diffs, a basic install firewall, dynamic Docker sandboxing for local package scans, and a disposable GCloud workflow for remote npm/package-malware benchmarking.
+The publishable packages are `@unsus/core`, `@unsus/sandbox`, and `@unsus/cli`, version `0.1.0`. This checkout is release preparation; registry publication is a separate step. `npm run verify:release` packs all three and verifies an installation in a clean temporary consumer project. It does not publish anything.
 
-Real-world sample sourcing is handled by research scripts, not core product code. They can build candidate manifests from advisory/dataset metadata, check live npm availability without downloading tarballs, and feed reviewed package specs to the disposable VM runner.
+To use the checkout's CLI in another project, invoke its absolute path:
+
+```sh
+cd /path/to/your-project  # must already contain package.json
+node /path/to/unsus/packages/cli/dist/index.js install package-name@1.2.3
+```
 
 ## Commands
 
-```bash
-unsus scan <target> [--json] [--dynamic] [--no-dynamic] [--fail-on high]
-unsus diff <pkg>@<newVersion> --against <pkg>@<oldVersion> [--json]
-unsus install <package> [--pm npm|bun|pnpm] [--force] [--json]
+```sh
+unsus scan <directory-or-registry-package> [--json] [--fail-on high]
+unsus scan <directory> --dynamic
+unsus scan <registry-package> --dynamic --allow-remote-dynamic
+unsus diff <new-target> --against <old-target> [--json]
+unsus install <registry-package> [--registry URL] [--dynamic] [--yes] [--force] [--json]
 unsus explain <report.json>
 ```
 
-## Development
+`scan` and `diff` accept local directories and registry names, exact versions, or supported semver ranges. Scanning never runs package code unless dynamic observation is explicitly requested. The installer supports **npm only**; it rejects local paths, Git URLs, tarball URLs, bun and pnpm with an error. It does not forward arbitrary npm flags.
 
-Install known development dependencies without lifecycle scripts:
+Exit codes are **0** allowed/completed, **1** warning requiring review, **2** blocked, and **3** operational failure. An `allow` decision means no blocking rule matched. It is not a safety certificate. JSON reports include direct-package coverage and omitted text files. Installer JSON stays on stdout; npm progress and installation guidance go to stderr.
 
-```bash
-npm install --ignore-scripts
+## What a guarded install does
+
+1. Resolves the registry request once and downloads its archive with a timeout and byte limit.
+2. Verifies the strongest supported registry integrity checksum (or legacy SHA-1 shasum), checks the package name/version against metadata, and rejects unsafe archive entries. Integrity establishes agreement with the registry, not author trust.
+3. Runs static analysis on the extracted direct package. Warnings require `--yes`; blocked findings require `--force` after review. Optional `--dynamic` uses Docker before installation.
+4. Retains the verified archive at `.unsus/artifacts/<sha512>.tgz` inside your project and passes that archive to npm with `--ignore-scripts` and an explicit local project prefix, overriding global/prefix configuration. This flag also disables transitive and project lifecycle scripts during that install, even when ordinary npm configuration enables them.
+
+**Keep and commit `.unsus/artifacts/` with `package.json` and `package-lock.json`.** npm records a relative `file:` dependency to this archive, so deleting it breaks reproducible installs. Treat these as vendored dependencies; the installer never garbage-collects them automatically. Updating a package through `unsus install` produces a new archive and dependency reference. Do not publish a library expecting consumers to resolve your private artifact path.
+
+Later installs must also use `npm ci --ignore-scripts` or `npm install --ignore-scripts`. unsus does not change your persistent npm settings. Packages that depend on build/install hooks may remain unusable until separately reviewed and built. `--force` never enables lifecycle scripts and cannot bypass checksum or extraction failures. Transitive dependencies are resolved by npm and **are not scanned**.
+
+## Analysis and limits
+
+Static heuristics inspect lifecycle metadata, source patterns with JavaScript token context, imported child-process bindings, credential/network/filesystem access patterns, dynamic evaluation, obfuscation, binary indicators and version changes. Comments, string examples and TypeScript declaration files do not count as executed API calls. This is not full semantic or data-flow analysis: unusual aliases, computed properties, shadowed bindings and unsupported typed-source syntax can be missed or misclassified; an unparsed tail falls back to conservative pattern matching. Isolated capabilities and accumulated documentation noise require review rather than automatically blocking. Explicit behavioral chains and dense-source obfuscation rules still block. Published `dist/` files are included. Individual text files above 256 KiB or containing NUL bytes are omitted and make the report warn. Unknown formats receive limited inspection. Version diffs hash complete contents, including omitted text and binaries, so local diffs can read large files in full; ordinary scans keep bounded text/header reads. Local `.git`, `node_modules` and symbolic links are skipped; bundled dependencies inside `node_modules` are not analyzed.
+
+Registry downloads and metadata are capped at 20 MiB with a 30-second request timeout. Archive inflation is capped at 100 MiB, individual entries at 10 MiB and entries at 10,000. Links, special files, traversal, duplicate/case-colliding paths and inconsistent package identities are rejected. These conservative limits may reject legitimate packages. Registry metadata and tarball URLs must use HTTPS, must not contain credentials, and redirects are rejected. The only HTTP exception is the explicitly configured loopback registry origin. Private registry authentication and registries requiring redirects are not supported in this release. The default is `https://registry.npmjs.org`; installer `--registry` supports compatible registries (HTTP is allowed only for explicitly configured loopback testing).
+
+Dynamic observation runs lifecycle scripts in a copied workspace with Docker networking disabled, limited CPU/memory/processes, no host credentials passed as environment variables, and a read-only container root. Prepare the image with `docker pull node:22-bookworm-slim`. Docker absence, daemon failure and launch failure stop a requested dynamic run; execution never falls back to the host. Containers are created before scripts start. Every started container is removed with a bounded deadline and its absence is confirmed before workspace cleanup. If creation or teardown cannot be confirmed, the command fails and retains the named temporary workspace for manual cleanup. Remote dynamic scans require `--allow-remote-dynamic`; `install --dynamic` explicitly opts in for that registry package. Dynamic mode does not install dependencies and may report build failures from missing tools.
+
+Docker observation is experimental. There is no syscall tracing, network-attempt detection, malware reverse engineering, sandbox-escape detection, full provenance verification or complete vulnerability database. It is not a proven boundary for hostile samples. Development and CI use harmless synthetic packages only.
+
+## Development and release checks
+
+```sh
+npm ci --ignore-scripts
 npm run typecheck
 npm test
 npm run benchmark:synthetic
+npm run verify:release
 ```
 
-Local smoke examples:
+Tests include a loopback registry and a real npm install with harmless root, direct and transitive lifecycle markers; none may execute. They also cover tampered archives, missing checksums, extraction limits, symbolic links and package identity mismatches. Synthetic benchmark scores describe these fixtures only, not real-world detection rates.
 
-```bash
-node packages/cli/dist/index.js scan fixtures/benign/normal-package --json
-node packages/cli/dist/index.js scan fixtures/suspicious/postinstall-env-network --dynamic
-node packages/cli/dist/index.js diff fixtures/suspicious/postinstall-env-network --against fixtures/benign/normal-package
-```
-
-Real-world sample metadata workflow:
-
-```bash
-npm run samples:datadog-npm -- --output artifacts/malware-lab/datadog/npm-candidates.json --limit 200
-npm run samples:check-npm -- --input artifacts/malware-lab/datadog/npm-candidates.json --output artifacts/malware-lab/datadog/npm-available.json --json
-```
-
-Those commands are metadata-only. They do not download npm tarballs or execute package code.
-
-## Dependency Note
-
-The initial dependency set is intentionally small and mature:
-
-- `typescript` and `@types/node` for strict TypeScript builds.
-- `acorn` for JavaScript syntax parsing without executing code.
-- `semver` for npm version/range selection.
-- `tar` for safe tarball extraction without lifecycle execution.
-
-## What It Detects
-
-- Install-time lifecycle scripts.
-- Suspicious shell fragments inside lifecycle scripts.
-- Dynamic code execution such as `eval` and `Function`.
-- Child process, network, credential, and filesystem access patterns.
-- Obfuscation signals and high-entropy strings.
-- Binary payloads and executable file extensions.
-- Version-to-version additions of risky files, scripts, and dependencies.
-
-## What It Does Not Detect Yet
-
-- Full malware reverse engineering.
-- Native sandbox escape attempts.
-- Complete source-vs-registry provenance verification.
-- Syscall-level network-attempt tracing inside the sandbox.
-- Ecosystems outside npm-compatible packages.
-- Enterprise fleet inventory.
-
-## False Positive Philosophy
-
-One isolated signal should usually explain and warn. Blocking is reserved for behavioral chains, especially install-time execution combined with credential access, network access, child process execution, obfuscation, or binary payloads.
-
-## Safety Warning
-
-Do not use real suspicious packages for local development. If a test requires real hostile behavior, use the manifest-driven disposable GCloud workflow in `docs/malicious-payload-testing.md`; package tarballs should be fetched on the VM, not on the host.
+Historical research and disposable-lab documentation remains under `docs/` and `scripts/research/`; it is separate from the v0.1 product path and is not needed for onboarding. Do not fetch or execute real malicious samples on a development machine.

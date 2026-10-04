@@ -111,3 +111,47 @@ function workspacePathFromArgs(args: string[]): string {
   assert.ok(src);
   return src;
 }
+
+test("sandbox rejects copied symbolic links without changing external file permissions", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "unsus-test-sandbox-"));
+  try {
+    const source = path.join(root, "source");
+    await fs.mkdir(source);
+    const outside = path.join(root, "outside.txt");
+    await fs.writeFile(outside, "fixture", { mode: 0o600 });
+    await fs.symlink(outside, path.join(source, "link"));
+    await assert.rejects(runLifecycleScriptsInDockerSandbox({ sourceRootPath: source, packageJson: { scripts: { postinstall: "echo fixture" } }, dockerExecutor: async () => ({ exitCode: 0, stdout: "", stderr: "", timedOut: false }) }), /symbolic link/i);
+    assert.equal((await fs.stat(outside)).mode & 0o777, 0o600);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
+
+test("sandbox treats Docker exit 125 as infrastructure failure", async () => {
+  await assert.rejects(runLifecycleScriptsInDockerSandbox({ sourceRootPath: path.join(repoRoot, "fixtures/benign/install-script-build-package"), packageJson: { scripts: { postinstall: "echo fixture" } }, dockerExecutor: async () => ({ exitCode: 125, stdout: "", stderr: "image unavailable", timedOut: false }) }), /infrastructure failure/i);
+});
+
+test("real executor awaits teardown and retains workspace when container absence is unconfirmed", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "unsus-test-docker-executor-"));
+  const oldPath = process.env.PATH;
+  try {
+    const fakeDocker = `#!${process.execPath}\nconst fs=require('fs');const path=require('path');const root=${JSON.stringify(root)};const args=process.argv.slice(2);fs.appendFileSync(path.join(root,'calls'),args[0]+'\\n');if(args[0]==='create'||args[0]==='run'){const mount=args[args.indexOf('--mount')+1];fs.writeFileSync(path.join(root,'workspace'),mount.split(',').find(x=>x.startsWith('src=')).slice(4));}if(args[0]==='create'){console.log('synthetic-container-id');}else if(args[0]==='start'||args[0]==='run'){setInterval(()=>{},1000);}else if(args[0]==='rm'){setTimeout(()=>{if(fs.existsSync(path.join(root,'fail'))){console.error('synthetic daemon unavailable');process.exitCode=1;}else{fs.writeFileSync(path.join(root,'removed'),'yes');}},100);}else if(args[0]==='inspect'){console.error('Error: No such object: synthetic');process.exitCode=1;}`;
+    await fs.writeFile(path.join(root, "docker"), fakeDocker, { mode: 0o755 });
+    process.env.PATH = `${root}${path.delimiter}${oldPath}`;
+    const options = { sourceRootPath: path.join(repoRoot, "fixtures/benign/install-script-build-package"), packageJson: { scripts: { postinstall: "echo harmless" } }, timeoutMs: 500 };
+    const result = await runLifecycleScriptsInDockerSandbox(options);
+    assert.equal(result.timedOut, true);
+    assert.equal(await fs.readFile(path.join(root, "removed"), "utf8"), "yes", "runner must not return before removal completes");
+    assert.match(await fs.readFile(path.join(root, "calls"), "utf8"), /^create\nstart\nrm\ninspect\n$/);
+    await fs.writeFile(path.join(root, "fail"), "yes");
+    await assert.rejects(runLifecycleScriptsInDockerSandbox(options), /cleanup|teardown|absence/i);
+    const workspace = await fs.readFile(path.join(root, "workspace"), "utf8");
+    await fs.access(workspace);
+    await fs.rm(path.dirname(workspace), { recursive: true, force: true });
+  } finally {
+    if (oldPath === undefined) delete process.env.PATH; else process.env.PATH = oldPath;
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

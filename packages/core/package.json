@@ -1,6 +1,6 @@
 {
   "name": "@unsus/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,6 +15,30 @@
   "dependencies": {
     "acorn": "^8.14.1",
     "semver": "^7.7.2",
-    "tar": "^7.4.3"
-  }
+    "tar": "^7.5.22"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AnishDe12020/unsus.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/AnishDe12020/unsus/issues"
+  },
+  "homepage": "https://github.com/AnishDe12020/unsus#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
+  "description": "Static package analysis, verified registry downloads, and bounded tarball extraction."
 }

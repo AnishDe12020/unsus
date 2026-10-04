@@ -15,8 +15,9 @@ export function calculateRiskScore(findings: Finding[]): number {
 
   const categories = new Set(findings.map((finding) => finding.category));
   const types = new Set(findings.map((finding) => finding.type));
-  const hasNetworkBehavior = types.has("network_api") || types.has("ip_literal");
+  const hasNetworkBehavior = types.has("network_api");
   const denseSourceObfuscation = detectDenseSourceObfuscation(findings);
+  const hasObfuscationBehavior = ["base64_decode", "charcode_chain", "escape_chain"].some(type => types.has(type)) || denseSourceObfuscation.blockAlone;
   const hasOnlyLowSignalNoise = findings.every((finding) =>
     ["url_literal", "high_entropy_string", "network_detection_unsupported", "wallet_like_literal"].includes(finding.type)
   );
@@ -41,12 +42,12 @@ export function calculateRiskScore(findings: Finding[]): number {
     chainTriggered = true;
   }
 
-  if (categories.has("obfuscation") && categories.has("dynamic_code_execution")) {
+  if (hasObfuscationBehavior && categories.has("dynamic_code_execution")) {
     score = Math.max(score, 8.0);
     chainTriggered = true;
   }
 
-  if (categories.has("obfuscation") && (categories.has("code_execution") || hasNetworkBehavior)) {
+  if (hasObfuscationBehavior && (categories.has("code_execution") || hasNetworkBehavior)) {
     score = Math.max(score, 9.0);
     chainTriggered = true;
   }
@@ -85,6 +86,7 @@ export function calculateRiskScore(findings: Finding[]): number {
     score = Math.min(score, 4.0);
   }
 
+  if (!chainTriggered && !findings.some(finding => finding.severity === "critical")) score = Math.min(score, 6.8);
   return Math.min(10, Number(score.toFixed(1)));
 }
 
@@ -136,7 +138,7 @@ function detectDenseSourceObfuscation(findings: Finding[]): DenseSourceObfuscati
       return false;
     }
 
-    if (isLowSignalMetadataOrDocPath(finding.file)) {
+    if (!/\.[cm]?[jt]sx?$/i.test(finding.file) || /\.d\.[cm]?ts$/i.test(finding.file) || isLowSignalMetadataOrDocPath(finding.file)) {
       return false;
     }
 

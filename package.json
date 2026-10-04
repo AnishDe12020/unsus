@@ -1,6 +1,6 @@
 {
   "name": "unsus",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "A local package firewall for developers, CI, and AI coding agents.",
   "license": "MIT",
@@ -15,7 +15,8 @@
     "benchmark:synthetic": "npm run build && node scripts/benchmarks/run-synthetic-corpus.mjs",
     "samples:datadog-npm": "node scripts/research/build-datadog-npm-candidates.mjs",
     "samples:check-npm": "node scripts/research/check-npm-sample-availability.mjs",
-    "lint": "tsc -b packages/core packages/sandbox packages/cli --pretty false"
+    "lint": "tsc -b packages/core packages/sandbox packages/cli --pretty false",
+    "verify:release": "npm run build && node scripts/verify-release.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.15.29",
@@ -25,6 +26,9 @@
   "dependencies": {
     "acorn": "^8.14.1",
     "semver": "^7.7.2",
-    "tar": "^7.4.3"
+    "tar": "^7.5.22"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

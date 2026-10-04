@@ -1,4 +1,5 @@
 import type { ExtractedPackage, Finding } from "../types.js";
+import { sourceContext } from "./source-context.js";
 import { createFinding, lineForOffset } from "./finding.js";
 
 const STRING_LITERAL = /(["'`])((?:\\.|(?!\1).){32,})\1/g;
@@ -15,8 +16,14 @@ export function analyzeEntropy(pkg: ExtractedPackage): Finding[] {
       continue;
     }
 
-    for (const match of file.content.matchAll(STRING_LITERAL)) {
-      const value = match[2] ?? "";
+    const context = file.kind === "source" ? sourceContext(file) : undefined;
+    const fallbackOffset = context ? context.unparsedOffset : 0;
+    const literals = [
+      ...(context?.strings ?? []),
+      ...(fallbackOffset !== undefined ? Array.from(file.content.slice(fallbackOffset).matchAll(STRING_LITERAL), match => ({ value: match[2] ?? "", start: fallbackOffset + (match.index ?? 0) })) : [])
+    ];
+    for (const literal of literals) {
+      const value = literal.value;
       if (value.length >= 40 && shannonEntropy(value) >= 4.2) {
         findings.push(
           createFinding({
@@ -26,7 +33,7 @@ export function analyzeEntropy(pkg: ExtractedPackage): Finding[] {
             title: "High-entropy string",
             message: "Source contains a long high-entropy string that may be encoded or obfuscated data.",
             file: file.path,
-            line: lineForOffset(file.content, match.index ?? 0),
+            line: lineForOffset(file.content, literal.start),
             code: value.slice(0, 96),
             evidence: { length: value.length, entropy: Number(shannonEntropy(value).toFixed(2)) },
             confidence: 0.7

@@ -1,6 +1,6 @@
 {
   "name": "@unsus/sandbox",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,5 +11,32 @@
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
     "test": "node --test \"dist/**/*.test.js\""
-  }
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AnishDe12020/unsus.git",
+    "directory": "packages/sandbox"
+  },
+  "bugs": {
+    "url": "https://github.com/AnishDe12020/unsus/issues"
+  },
+  "homepage": "https://github.com/AnishDe12020/unsus#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@unsus/core": "0.1.0"
+  },
+  "description": "Opt-in Docker lifecycle observation for unsus with networking disabled."
 }

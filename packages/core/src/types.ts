@@ -52,6 +52,8 @@ export interface ExtractedPackage {
   packageJson: Record<string, unknown>;
   isLocal: boolean;
   cleanup?: () => Promise<void> | void;
+  /** Verified registry archive, available until cleanup. */
+  tarballPath?: string;
 }
 
 export interface PackageFile {
@@ -60,6 +62,8 @@ export interface PackageFile {
   kind: "source" | "json" | "binary" | "text" | "other";
   content?: string;
   headerBytes?: Uint8Array;
+  /** Full-byte digest for files whose content was not retained. */
+  contentHash?: string;
 }
 
 export interface ScanResult {
@@ -72,6 +76,15 @@ export interface ScanResult {
   generatedAt: string;
   sandbox?: SandboxResult;
   diff?: VersionDiffResult;
+  coverage?: {
+    scope: "direct-package";
+    complete: boolean;
+    files: number;
+    textFilesAnalyzed: number;
+    omittedTextFiles: string[];
+    dependenciesAnalyzed: false;
+    limitations: string[];
+  };
 }
 
 export interface VersionDiffResult {

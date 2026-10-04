@@ -1,10 +1,11 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, createReadStream } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 import type { ExtractedPackage, PackageFile, PackageIdentity } from "../types.js";
 
 const DEFAULT_MAX_TEXT_BYTES = 256 * 1024;
-const SKIP_DIRS = new Set([".git", "node_modules", "dist", "coverage"]);
+const SKIP_DIRS = new Set([".git", "node_modules"]);
 const SOURCE_EXTENSIONS = new Set([
   ".js",
   ".jsx",
@@ -30,6 +31,8 @@ const TEXT_EXTENSIONS = new Set([
 
 export interface CollectFilesOptions {
   maxTextBytes?: number;
+  /** Diff-only full-byte hashing; normal scans retain bounded reads. */
+  hashOmittedFiles?: boolean;
 }
 
 export async function extractLocalPackage(
@@ -38,6 +41,7 @@ export async function extractLocalPackage(
 ): Promise<ExtractedPackage> {
   const resolvedRoot = path.resolve(rootPath);
   const packageJsonPath = path.join(resolvedRoot, "package.json");
+  if ((await fs.stat(packageJsonPath)).size > DEFAULT_MAX_TEXT_BYTES) throw new Error("package.json exceeds text byte limit.");
   const packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf8")) as Record<string, unknown>;
   const identity = identityFromPackageJson(packageJson);
   const files = await collectPackageFiles(resolvedRoot, options);
@@ -90,6 +94,10 @@ export async function collectPackageFiles(
 
       if (shouldReadContent(kind, stat.size, maxTextBytes, headerBytes)) {
         packageFile.content = await fs.readFile(absolutePath, "utf8");
+      } else if (options.hashOmittedFiles) {
+        const hash = createHash("sha256");
+        for await (const chunk of createReadStream(absolutePath)) hash.update(chunk);
+        packageFile.contentHash = hash.digest("hex");
       }
 
       files.push(packageFile);
