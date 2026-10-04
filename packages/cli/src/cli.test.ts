@@ -10,8 +10,8 @@ const cliPath = path.join(repoRoot, "packages/cli/dist/index.js");
 test("version and command help work without resolving packages or installing anything", () => {
   const version = spawnSync(process.execPath, [cliPath, "--version"], { encoding: "utf8" });
   assert.equal(version.status, 0, version.stderr);
-  assert.match(version.stdout, /^0\.1\.0\n$/);
-  for (const command of ["scan", "diff", "install", "explain"]) {
+  assert.match(version.stdout, /^0\.2\.0\n$/);
+  for (const command of ["scan", "diff", "install", "project", "explain"]) {
     const help = spawnSync(process.execPath, [cliPath, command, "--help"], { encoding: "utf8" });
     assert.equal(help.status, 0, help.stderr);
     assert.match(help.stdout, new RegExp(`Usage: unsus ${command}`));
@@ -93,5 +93,7 @@ test("scan rejects invalid fail-on levels and unknown options", () => {
 test("diff rejects missing option values before resolving packages", () => {
   const result = spawnSync(process.execPath, [cliPath, "diff", "ms@2.1.3", "--against", "--json"], { encoding: "utf8" });
   assert.equal(result.status, 3);
-  assert.match(result.stderr, /--against requires a value/);
+  assert.equal(result.stderr, "");
+  assert.match(JSON.parse(result.stdout).error.message, /--against requires a value/);
+  assert.equal(JSON.parse(result.stdout).error.code, "OPERATIONAL_ERROR");
 });

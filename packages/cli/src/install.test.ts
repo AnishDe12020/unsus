@@ -63,11 +63,25 @@ test("installer uses exact verified bytes and disables root and transitive scrip
     }
     const direct = bodies.get("/direct.tgz")!;
     packument = { name: "synthetic-direct", "dist-tags": { latest: "1.0.0" }, versions: { "1.0.0": { name: "synthetic-direct", version: "1.0.0", dist: { tarball: `${registry}/direct.tgz`, integrity: `sha512-${createHash("sha512").update(direct).digest("base64")}` } } } };
+    // Scan and both sides of diff must use the same explicit loopback registry.
+    const scan = await command(["scan", "synthetic-direct", "--registry", registry, "--json"], project);
+    assert.ok([0, 1, 2].includes(scan.code!), scan.stderr);
+    assert.equal(JSON.parse(scan.stdout).package.registry, registry);
+    const diff = await command(["diff", "synthetic-direct", "--against", "synthetic-direct", "--registry", registry, "--json"], project);
+    assert.equal(diff.code, 0, diff.stderr); assert.equal(JSON.parse(diff.stdout).changedFiles.length, 0);
+    const bin = path.join(root, "bin"); await mkdir(bin);
+    await writeFile(path.join(bin, "npm"), "#!/bin/sh\nexit 17\n", { mode: 0o755 });
+    const failure = await command(["install", "synthetic-direct", "--registry", registry, "--force", "--json"], project, { ...process.env, PATH: `${bin}:${process.env.PATH}` });
+    assert.equal(failure.code, 3);
+    const failedReport = JSON.parse(failure.stdout);
+    assert.equal(failedReport.error.code, "INSTALL_FAILED");
+    assert.equal(failedReport.report.package.name, "synthetic-direct");
+    const downloadsBeforeInstall = directDownloads;
     const result = await command(["install", "synthetic-direct", "--registry", registry, "--force", "--json"], project, { ...process.env, npm_config_ignore_scripts: "false", npm_config_global: "true", npm_config_prefix: path.join(root, "diverted-prefix"), npm_config_cache: path.join(root, "npm-cache") });
     assert.equal(result.code, 0, result.stderr);
     const report = JSON.parse(result.stdout);
     assert.equal(report.coverage.dependenciesAnalyzed, false);
-    assert.equal(directDownloads, 1, "npm must not refetch the mutable registry target");
+    assert.equal(directDownloads, downloadsBeforeInstall + 1, "npm must not refetch the mutable registry target");
     for (const marker of ["ROOT-RAN", "node_modules/synthetic-direct/SCRIPT-RAN", "node_modules/synthetic-transitive/SCRIPT-RAN"]) await assert.rejects(access(path.join(project, marker)));
     assert.match(await readFile(path.join(project, "node_modules/synthetic-direct/index.js"), "utf8"), /direct-verified/);
     const pkg = JSON.parse(await readFile(path.join(project, "package.json"), "utf8"));

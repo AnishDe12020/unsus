@@ -16,7 +16,11 @@ export function calculateRiskScore(findings: Finding[]): number {
   const categories = new Set(findings.map((finding) => finding.category));
   const types = new Set(findings.map((finding) => finding.type));
   const hasNetworkBehavior = types.has("network_api");
-  const denseSourceObfuscation = detectDenseSourceObfuscation(findings);
+  // Table-shaped data alone is not executable obfuscation. Keep full density when
+  // decoding or execution/network behavior is present; shape is not an allowlist.
+  const hasActiveConsumer = hasNetworkBehavior || categories.has("dynamic_code_execution") || categories.has("code_execution") ||
+    ["base64_decode", "charcode_chain", "escape_chain"].some(type => types.has(type));
+  const denseSourceObfuscation = detectDenseSourceObfuscation(findings, !hasActiveConsumer);
   const hasObfuscationBehavior = ["base64_decode", "charcode_chain", "escape_chain"].some(type => types.has(type)) || denseSourceObfuscation.blockAlone;
   const hasOnlyLowSignalNoise = findings.every((finding) =>
     ["url_literal", "high_entropy_string", "network_detection_unsupported", "wallet_like_literal"].includes(finding.type)
@@ -87,6 +91,7 @@ export function calculateRiskScore(findings: Finding[]): number {
   }
 
   if (!chainTriggered && !findings.some(finding => finding.severity === "critical")) score = Math.min(score, 6.8);
+  if (!chainTriggered && findings.some(finding => isTableShape(finding))) score = Math.max(score, 3);
   return Math.min(10, Number(score.toFixed(1)));
 }
 
@@ -132,11 +137,13 @@ interface DenseSourceObfuscation {
   installTimeChain: boolean;
 }
 
-function detectDenseSourceObfuscation(findings: Finding[]): DenseSourceObfuscation {
+function detectDenseSourceObfuscation(findings: Finding[], excludeTables = false): DenseSourceObfuscation {
   const highEntropySourceFindings = findings.filter((finding) => {
     if (finding.type !== "high_entropy_string" || !finding.file) {
       return false;
     }
+
+    if (excludeTables && isTableShape(finding)) return false;
 
     if (!/\.[cm]?[jt]sx?$/i.test(finding.file) || /\.d\.[cm]?ts$/i.test(finding.file) || isLowSignalMetadataOrDocPath(finding.file)) {
       return false;
@@ -187,4 +194,8 @@ function numericEvidence(finding: Finding, key: string): number {
   }
 
   return 0;
+}
+
+function isTableShape(finding: Finding): boolean {
+  return finding.type === "high_entropy_string" && ["unicode_ranges", "word_table"].includes(String(finding.evidence?.dataShape));
 }

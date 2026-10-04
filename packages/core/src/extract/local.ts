@@ -31,6 +31,8 @@ const TEXT_EXTENSIONS = new Set([
 
 export interface CollectFilesOptions {
   maxTextBytes?: number;
+  maxEntries?: number;
+  maxTotalBytes?: number;
   /** Diff-only full-byte hashing; normal scans retain bounded reads. */
   hashOmittedFiles?: boolean;
 }
@@ -61,11 +63,13 @@ export async function collectPackageFiles(
 ): Promise<PackageFile[]> {
   const maxTextBytes = options.maxTextBytes ?? DEFAULT_MAX_TEXT_BYTES;
   const files: PackageFile[] = [];
+  let entriesSeen = 0, totalBytes = 0;
 
   async function walk(directory: string): Promise<void> {
-    const entries = await fs.readdir(directory, { withFileTypes: true });
-
-    for (const entry of entries) {
+    const entries = await fs.opendir(directory);
+    for await (const entry of entries) {
+      entriesSeen++;
+      if (options.maxEntries !== undefined && entriesSeen > options.maxEntries) throw new Error("Package exceeds file entry limit.");
       if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) {
         continue;
       }
@@ -83,6 +87,8 @@ export async function collectPackageFiles(
       }
 
       const stat = await fs.stat(absolutePath);
+      totalBytes += stat.size;
+      if (options.maxTotalBytes !== undefined && totalBytes > options.maxTotalBytes) throw new Error("Package exceeds total file byte limit.");
       const kind = classifyFile(relativePath);
       const headerBytes = await readHeader(absolutePath);
       const packageFile: PackageFile = {

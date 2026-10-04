@@ -12,7 +12,7 @@ import { calculateRiskScore, decisionFromPolicy, defaultPolicy, riskLevelFromSco
 import type { ExtractedPackage, Finding, SandboxResult, ScanOptions, ScanResult } from "./types.js";
 
 export async function scanTarget(target: string, options: ScanOptions = {}): Promise<ScanResult> {
-  const extracted = await resolveTarget(target);
+  const extracted = await resolveTarget(target, options.registry);
   try {
     return await scanPackage(extracted, options);
   } finally {
@@ -143,7 +143,7 @@ export function analyzePackage(pkg: ExtractedPackage): Finding[] {
   ];
 }
 
-async function resolveTarget(target: string): Promise<ExtractedPackage> {
+async function resolveTarget(target: string, registry?: string): Promise<ExtractedPackage> {
   if (await isDirectory(target)) {
     return extractLocalPackage(target);
   }
@@ -152,7 +152,7 @@ async function resolveTarget(target: string): Promise<ExtractedPackage> {
     throw new Error(`Local package path does not exist or is not a directory: ${target}`);
   }
 
-  return resolveNpmPackage(target);
+  return resolveNpmPackage(target, registry ? { registry } : {});
 }
 
 async function isDirectory(target: string): Promise<boolean> {

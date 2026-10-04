@@ -115,6 +115,7 @@ export interface SandboxResult {
 export type DynamicSandboxRunner = (pkg: ExtractedPackage) => Promise<SandboxResult>;
 
 export interface ScanOptions {
+  registry?: string;
   dynamic?: boolean;
   failOn?: RiskLevel;
   dynamicRunner?: DynamicSandboxRunner;

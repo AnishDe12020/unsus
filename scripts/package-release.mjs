@@ -56,7 +56,12 @@ export async function packageRelease(outputDirectory) {
     const cli = path.join(extracted, name, 'bin', 'unsus');
     const consumer = path.join(scratch, 'consumer');
     await mkdir(consumer);
+    await writeFile(path.join(consumer, 'package.json'), JSON.stringify({ private: true, dependencies: {} }));
     assert.equal(run(process.execPath, [cli, '--version'], consumer).trim(), version);
+    const project = JSON.parse(run(process.execPath, [cli, 'project', '.', '--json'], consumer));
+    assert.equal(project.kind, 'project');
+    assert.equal(project.coverage.declared, 0);
+    assert.equal(project.coverage.lockfileVerified, false);
     if (process.platform !== 'win32') {
       const linked = path.join(consumer, 'unsus');
       await symlink(cli, linked);
@@ -67,6 +72,9 @@ export async function packageRelease(outputDirectory) {
     const report = JSON.parse(run(process.execPath, [cli, 'scan', fixture, '--json'], consumer));
     assert.equal(report.package.name, 'normal-package');
     assert.equal(report.coverage.dependenciesAnalyzed, false);
+    const sarifPath = path.join(consumer, 'report.sarif');
+    assert.equal(run(process.execPath, [cli, 'scan', fixture, '--format', 'sarif', '--output', sarifPath], consumer), '');
+    assert.equal(JSON.parse(await readFile(sarifPath, 'utf8')).version, '2.1.0');
     const reportPath = path.join(scratch, 'report.json');
     await writeFile(reportPath, JSON.stringify(report));
     assert.match(run(process.execPath, [cli, 'explain', reportPath], consumer), /normal-package/);

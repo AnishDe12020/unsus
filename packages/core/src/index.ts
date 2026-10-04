@@ -40,4 +40,8 @@ export {
 export { analyzePackage, scanExtractedPackage, scanPackage, scanTarget } from "./scan.js";
 export { compareExtractedPackages, diffTargets } from "./diff/version-diff.js";
 export { formatJsonReport } from "./report/json.js";
+export { formatSarifReport } from "./report/sarif.js";
 export { formatDiffText, formatScanText } from "./report/text.js";
+
+export { scanProject, formatProjectText } from "./project.js";
+export type { ProjectOptions, ProjectResult, ProjectDependency } from "./project.js";

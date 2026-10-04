@@ -9,6 +9,7 @@ import { analyzeBinary } from "./binary.js";
 import { analyzeEntropy } from "./entropy.js";
 import { analyzeIocs } from "./ioc.js";
 import { analyzeMetadata } from "./metadata.js";
+import { scanExtractedPackage } from "../scan.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 
@@ -60,4 +61,27 @@ test("execution signals distinguish regex, comments and declarations from import
   const typedSource = `// "${blob}"\n@decorator\nclass Example { payload = "${blob}"; }`;
   const tail = analyzeEntropy({ ...pkg, files: [{ path: "decorated.ts", content: typedSource, size: typedSource.length, kind: "source" }] });
   assert.equal(tail.filter(finding => finding.type === "high_entropy_string").length, 1);
+});
+
+test("passive parser tables require review while executable chains and encoded payloads still block", async () => {
+  const pkg = await extractLocalPackage(path.join(repoRoot, "fixtures/benign/normal-package"));
+  const ranges = Array.from({ length: 200 }, (_, i) => String.fromCharCode(0x100 + i * 3) + "-" + String.fromCharCode(0x102 + i * 3)).join("");
+  const words = "Alphabetic Lowercase Uppercase Modifier_Letter Other_Letter Decimal_Number Connector_Punctuation Format_Control";
+  const tables = [ranges, ...Array.from({ length: 24 }, () => words)];
+  const inspect = (values: string[], behavior = "") => {
+    const content = values.map((value, i) => `const table${i} = ${JSON.stringify(value)};`).join("\n") + behavior;
+    return scanExtractedPackage({ ...pkg, packageJson: { scripts: { prepare: "node build.js" } },
+      files: [{ path: "parser.js", kind: "source", content, size: Buffer.byteLength(content) }] });
+  };
+  const passive = inspect(tables, '\nconst reference = "https://example.invalid/parser";');
+  assert.equal(passive.decision, "warn");
+  assert.equal(passive.findings.filter(f => f.type === "high_entropy_string").length, tables.length);
+  const standalone = scanExtractedPackage({ ...pkg, files: [{ path: "data.js", kind: "source", content: `const ranges = ${JSON.stringify(ranges)};`, size: ranges.length }] });
+  assert.equal(standalone.decision, "warn", "Table shape must not be treated as proof of safety");
+  for (const behavior of ['\neval(table0);', '\natob(table0);', '\nfetch(table0);', '\nrequire("child_process").exec(table0);']) {
+    assert.equal(inspect(tables, behavior).decision, "block", behavior);
+  }
+  const payload = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".repeat(12);
+  const disguised = "one two three four five six seven eight " + payload;
+  assert.equal(inspect(Array(6).fill(disguised)).decision, "block", "A few words must not hide a long encoded payload");
 });

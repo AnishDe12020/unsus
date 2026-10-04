@@ -7,8 +7,8 @@ import { extractLocalPackage } from "../extract/local.js";
 import { isNpmPackageRequest } from "../resolver/package-manager.js";
 import { resolveNpmPackage } from "../resolver/npm.js";
 
-export async function diffTargets(toTarget: string, againstTarget: string): Promise<VersionDiffResult> {
-  const resolved = await Promise.allSettled([resolveDiffTarget(toTarget), resolveDiffTarget(againstTarget)]);
+export async function diffTargets(toTarget: string, againstTarget: string, options: { registry?: string } = {}): Promise<VersionDiffResult> {
+  const resolved = await Promise.allSettled([resolveDiffTarget(toTarget, options.registry), resolveDiffTarget(againstTarget, options.registry)]);
   try {
     const [to, from] = resolved;
     if (to.status === "rejected") throw to.reason;
@@ -179,7 +179,7 @@ function dependencies(packageJson: Record<string, unknown>): Record<string, stri
   return result;
 }
 
-async function resolveDiffTarget(target: string): Promise<ExtractedPackage> {
+async function resolveDiffTarget(target: string, registry?: string): Promise<ExtractedPackage> {
   try {
     return await extractLocalPackage(target, { hashOmittedFiles: true });
   } catch {
@@ -187,7 +187,7 @@ async function resolveDiffTarget(target: string): Promise<ExtractedPackage> {
       throw new Error(`Local package path does not exist or is not a package directory: ${target}`);
     }
 
-    return resolveNpmPackage(target, { hashOmittedFiles: true });
+    return resolveNpmPackage(target, { hashOmittedFiles: true, ...(registry ? { registry } : {}) });
   }
 }
 
