@@ -52,14 +52,13 @@ export async function resolveNpmPackage(
   }
   const url = new URL(metadata.dist.tarball);
   const registryUrl = new URL(registry);
-  if (url.protocol !== "https:" && !(url.origin === registryUrl.origin && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) {
-    throw new Error("Package tarball requires HTTPS (or an explicitly configured loopback registry).");
-  }
+  validateTransport(url, registryUrl.origin);
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "unsus-npm-"));
   const tarballPath = path.join(tempDir, "package.tgz");
   let extracted: ExtractedPackage | undefined;
   try {
     const response = await fetchImpl(url.href, { signal: AbortSignal.timeout(30_000), redirect: "error" });
+    if (response.url) validateTransport(new URL(response.url), registryUrl.origin);
     if (!response.ok) throw new Error(`Failed to download tarball: HTTP ${response.status}.`);
     const bytes = await readBoundedResponse(response, options.maxDownloadBytes ?? 20 * 1024 * 1024);
     const integrity = verifyIntegrity(bytes, metadata.dist.integrity, metadata.dist.shasum);
@@ -91,6 +90,8 @@ export async function fetchPackument(
   registry: string,
   fetchImpl: typeof fetch
 ): Promise<Packument> {
+  const registryUrl = new URL(registry);
+  validateTransport(registryUrl, registryUrl.origin);
   const response = await fetchImpl(npmPackumentUrl(name, registry), {
     signal: AbortSignal.timeout(30_000),
     redirect: "error",
@@ -99,6 +100,7 @@ export async function fetchPackument(
     }
   });
 
+  if (response.url) validateTransport(new URL(response.url), registryUrl.origin);
   if (!response.ok) {
     throw new Error(`Failed to fetch npm metadata for ${name}: HTTP ${response.status}.`);
   }
@@ -195,4 +197,13 @@ function verifyIntegrity(bytes: Buffer, integrity?: string, shasum?: string): st
     return `sha1-${Buffer.from(shasum, "hex").toString("base64")}`;
   }
   throw new Error("Package integrity checksum missing or invalid.");
+}
+
+function validateTransport(url: URL, loopbackOrigin: string): void {
+  if (url.username || url.password) throw new Error("Registry and tarball URLs must not contain credentials.");
+  const local = url.protocol === "http:" && url.origin === loopbackOrigin &&
+    ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (url.protocol !== "https:" && !local) {
+    throw new Error("Registry and tarball transport requires HTTPS (HTTP is allowed only for the explicitly configured loopback registry).");
+  }
 }

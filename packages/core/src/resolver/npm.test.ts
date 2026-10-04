@@ -54,3 +54,19 @@ test("registry resolver rejects missing checksums, metadata mismatch and oversiz
     await assert.rejects(f.resolve({}, f.bytes, { maxDownloadBytes: 16 }), /limit|large/i);
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });
+
+test("resolver rejects insecure and credential-bearing metadata URLs before fetching", async () => {
+  for (const registry of ["http://registry.example", "ftp://registry.example", "https://user:password@registry.example"]) {
+    let fetched = false;
+    await assert.rejects(resolveNpmPackage("synthetic-example", { registry, fetchImpl: async () => { fetched = true; return Response.json({}); } }), /HTTPS|credentials|transport/i);
+    assert.equal(fetched, false);
+  }
+});
+
+test("metadata final response cannot downgrade to insecure transport", async () => {
+  await assert.rejects(resolveNpmPackage("synthetic-example", { fetchImpl: async () => {
+    const response = Response.json({});
+    Object.defineProperty(response, "url", { value: "http://registry.example/synthetic-example" });
+    return response;
+  } }), /HTTPS|transport/i);
+});

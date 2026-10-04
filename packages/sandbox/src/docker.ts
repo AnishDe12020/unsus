@@ -104,6 +104,7 @@ export async function runLifecycleScriptsInDockerSandbox(options: LifecycleSandb
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "unsus-sandbox-"));
   const workspacePath = path.join(tempRoot, "workspace");
 
+  let cleanupSafe = true;
   try {
     await copyWorkspace(options.sourceRootPath, workspacePath);
     await makeWorkspaceWritable(workspacePath);
@@ -194,29 +195,47 @@ export async function runLifecycleScriptsInDockerSandbox(options: LifecycleSandb
       timeline,
       findings
     };
+  } catch (error) {
+    if (error instanceof DockerCleanupError) {
+      cleanupSafe = false;
+      throw new Error(`${error.message} Workspace retained at ${workspacePath}; remove the named container before deleting it.`);
+    }
+    throw error;
   } finally {
-    await rm(tempRoot, { recursive: true, force: true });
+    if (cleanupSafe) await rm(tempRoot, { recursive: true, force: true });
   }
 }
 
+class DockerCleanupError extends Error {}
+
 async function executeDocker(args: string[], options: { timeoutMs: number; containerName: string }): Promise<DockerExecutionResult> {
+  // Confirm creation before starting code: killing `docker run` during container
+  // creation can otherwise race a removal request and leave a later-started container.
+  const created = await executeDockerClient(["create", ...args.slice(1).filter((arg) => arg !== "--rm")], 5_000);
+  if (created.timedOut) {
+    throw new DockerCleanupError(`Docker create deadline exceeded; creation of ${options.containerName} is unconfirmed (no start was requested).`);
+  }
+  if (created.exitCode !== 0) throw new Error(`Docker sandbox infrastructure failure: ${truncate(created.stderr)}`);
+  try {
+    return await executeDockerClient(["start", "--attach", options.containerName], options.timeoutMs);
+  } finally {
+    await forceRemoveContainer(options.containerName);
+  }
+}
+
+async function executeDockerClient(args: string[], timeoutMs: number): Promise<DockerExecutionResult> {
   return new Promise((resolve, reject) => {
     const child = spawn("docker", args, {
       stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin"
-      }
+      env: { PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin" }
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     let timedOut = false;
-
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGKILL");
-      void forceRemoveContainer(options.containerName);
-    }, options.timeoutMs);
-
+    }, timeoutMs);
     let stdoutBytes = 0;
     let stderrBytes = 0;
     child.stdout.on("data", (chunk: Buffer) => {
@@ -233,27 +252,24 @@ async function executeDocker(args: string[], options: { timeoutMs: number; conta
     });
     child.on("close", (code) => {
       clearTimeout(timer);
-      resolve({
-        exitCode: code ?? (timedOut ? 137 : 1),
-        stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8"),
-        timedOut
-      });
+      resolve({ exitCode: code ?? (timedOut ? 137 : 1), stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8"), timedOut });
     });
   });
 }
 
 async function forceRemoveContainer(containerName: string): Promise<void> {
-  await new Promise<void>((resolve) => {
-    const child = spawn("docker", ["rm", "-f", containerName], {
-      stdio: "ignore",
-      env: {
-        PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin"
-      }
-    });
-    child.on("close", () => resolve());
-    child.on("error", () => resolve());
-  });
+  try {
+    const removed = await executeDockerClient(["rm", "-f", containerName], 5_000);
+    if (removed.timedOut || (removed.exitCode !== 0 && !/No such (container|object)/i.test(removed.stderr))) {
+      throw new Error(`removal failed: ${truncate(removed.stderr)}`);
+    }
+    const inspected = await executeDockerClient(["inspect", "--format", "{{.State.Running}}", containerName], 5_000);
+    if (inspected.timedOut || inspected.exitCode !== 1 || !/No such (container|object)/i.test(inspected.stderr)) {
+      throw new Error("container absence could not be confirmed");
+    }
+  } catch (error) {
+    throw new DockerCleanupError(`Docker teardown unconfirmed for ${containerName}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function lifecycleScripts(packageJson: Record<string, unknown>): Array<{ name: string; command: string }> {
