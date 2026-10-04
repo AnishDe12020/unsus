@@ -1,4 +1,5 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, createReadStream } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 import type { ExtractedPackage, PackageFile, PackageIdentity } from "../types.js";
@@ -30,6 +31,8 @@ const TEXT_EXTENSIONS = new Set([
 
 export interface CollectFilesOptions {
   maxTextBytes?: number;
+  /** Diff-only full-byte hashing; normal scans retain bounded reads. */
+  hashOmittedFiles?: boolean;
 }
 
 export async function extractLocalPackage(
@@ -91,6 +94,10 @@ export async function collectPackageFiles(
 
       if (shouldReadContent(kind, stat.size, maxTextBytes, headerBytes)) {
         packageFile.content = await fs.readFile(absolutePath, "utf8");
+      } else if (options.hashOmittedFiles) {
+        const hash = createHash("sha256");
+        for await (const chunk of createReadStream(absolutePath)) hash.update(chunk);
+        packageFile.contentHash = hash.digest("hex");
       }
 
       files.push(packageFile);

@@ -62,6 +62,8 @@ export interface PackageFile {
   kind: "source" | "json" | "binary" | "text" | "other";
   content?: string;
   headerBytes?: Uint8Array;
+  /** Full-byte digest for files whose content was not retained. */
+  contentHash?: string;
 }
 
 export interface ScanResult {

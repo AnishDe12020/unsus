@@ -8,12 +8,14 @@ import { isNpmPackageRequest } from "../resolver/package-manager.js";
 import { resolveNpmPackage } from "../resolver/npm.js";
 
 export async function diffTargets(toTarget: string, againstTarget: string): Promise<VersionDiffResult> {
-  const [to, from] = await Promise.all([resolveDiffTarget(toTarget), resolveDiffTarget(againstTarget)]);
+  const resolved = await Promise.allSettled([resolveDiffTarget(toTarget), resolveDiffTarget(againstTarget)]);
   try {
-    return compareExtractedPackages(from, to);
+    const [to, from] = resolved;
+    if (to.status === "rejected") throw to.reason;
+    if (from.status === "rejected") throw from.reason;
+    return compareExtractedPackages(from.value, to.value);
   } finally {
-    await to.cleanup?.();
-    await from.cleanup?.();
+    await Promise.all(resolved.map(result => result.status === "fulfilled" ? result.value.cleanup?.() : undefined));
   }
 }
 
@@ -27,7 +29,7 @@ export function compareExtractedPackages(from: ExtractedPackage, to: ExtractedPa
     .map(([filePath]) => filePath)
     .sort();
   const packageJsonChanges = diffPackageJson(from.packageJson, to.packageJson);
-  const findings = diffFindings(from, to, addedFiles, toFiles);
+  const findings = diffFindings(from, to, addedFiles, changedFiles, toFiles);
 
   return {
     from: from.identity,
@@ -44,6 +46,7 @@ function diffFindings(
   from: ExtractedPackage,
   to: ExtractedPackage,
   addedFiles: string[],
+  changedFiles: string[],
   toFiles: Map<string, PackageFile>
 ): Finding[] {
   const findings: Finding[] = [];
@@ -101,17 +104,19 @@ function diffFindings(
   }
 
   const addedSet = new Set(addedFiles);
-  const addedPackage = {
-    ...to,
-    files: to.files.filter((file) => addedSet.has(file.path))
-  };
-  for (const finding of analyzePackage(addedPackage)) {
+  const editedSet = new Set([...addedFiles, ...changedFiles]);
+  // Lifecycle changes are handled above; do not relabel unchanged metadata as a new file.
+  const beforeSignals = new Set(analyzePackage({ ...from, packageJson: {} }).map(signalKey));
+  const editedPackage = { ...to, packageJson: {}, files: to.files.filter(file => editedSet.has(file.path)) };
+  for (const finding of analyzePackage(editedPackage)) {
+    if (!finding.file || beforeSignals.has(signalKey(finding))) continue;
+    const added = addedSet.has(finding.file);
     findings.push({
       ...finding,
-      type: finding.category === "binary_payload" ? "new_binary_file" : "new_suspicious_source_file",
+      type: finding.category === "binary_payload" ? (added ? "new_binary_file" : "changed_binary_file") : (added ? "new_suspicious_source_file" : "changed_suspicious_source_file"),
       category: "version_diff_anomaly",
-      title: `New file finding: ${finding.title}`,
-      message: `Added file ${finding.file ?? "unknown"} has finding: ${finding.message}`
+      title: `${added ? "New" : "Changed"} file finding: ${finding.title}`,
+      message: `${added ? "Added" : "Changed"} file ${finding.file} has finding: ${finding.message}`
     });
   }
 
@@ -152,7 +157,7 @@ function scripts(packageJson: Record<string, unknown>): Record<string, string> {
   }
 
   return Object.fromEntries(
-    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string" && ["preinstall", "install", "postinstall", "preuninstall", "prepare"].includes(entry[0]))
   );
 }
 
@@ -176,13 +181,13 @@ function dependencies(packageJson: Record<string, unknown>): Record<string, stri
 
 async function resolveDiffTarget(target: string): Promise<ExtractedPackage> {
   try {
-    return await extractLocalPackage(target);
+    return await extractLocalPackage(target, { hashOmittedFiles: true });
   } catch {
     if (looksLikeLocalPath(target)) {
       throw new Error(`Local package path does not exist or is not a package directory: ${target}`);
     }
 
-    return resolveNpmPackage(target);
+    return resolveNpmPackage(target, { hashOmittedFiles: true });
   }
 }
 
@@ -191,9 +196,14 @@ function looksLikeLocalPath(target: string): boolean {
 }
 
 function fileHash(file: PackageFile): string {
+  if (file.content === undefined && file.contentHash) return file.contentHash;
   return createHash("sha256")
     .update(file.content ?? "")
     .update(Buffer.from(file.headerBytes ?? new Uint8Array()))
     .update(String(file.size))
     .digest("hex");
+}
+
+function signalKey(finding: Finding): string {
+  return JSON.stringify([finding.file, finding.type, finding.code ?? finding.evidence]);
 }

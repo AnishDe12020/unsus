@@ -1,12 +1,20 @@
 import { diffTargets, formatDiffText, formatJsonReport } from "@unsus/core";
 
-import { firstPositional, readOption } from "./scan.js";
+import { positionalArguments, readOption } from "./scan.js";
 
 export async function runDiffCommand(args: string[]): Promise<number> {
-  const target = firstPositional(args);
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]!;
+    if (arg === "--against") {
+      if (!args[index + 1] || args[index + 1]!.startsWith("--")) throw new Error("--against requires a value.");
+      index++;
+    } else if (arg.startsWith("-") && arg !== "--json") throw new Error(`Unknown diff option: ${arg}`);
+  }
+  const targets = positionalArguments(args);
+  const target = targets[0];
   const against = readOption(args, "--against");
 
-  if (!target || !against) {
+  if (targets.length !== 1 || !target || !against) {
     throw new Error("Usage: unsus diff <pkg>@<new> --against <pkg>@<old> [--json]");
   }
 

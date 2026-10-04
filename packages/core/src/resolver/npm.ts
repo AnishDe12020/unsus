@@ -13,6 +13,7 @@ export interface NpmResolverOptions {
   registry?: string;
   fetchImpl?: typeof fetch;
   maxDownloadBytes?: number;
+  hashOmittedFiles?: boolean;
 }
 
 interface PackumentVersion {
@@ -63,7 +64,7 @@ export async function resolveNpmPackage(
     const bytes = await readBoundedResponse(response, options.maxDownloadBytes ?? 20 * 1024 * 1024);
     const integrity = verifyIntegrity(bytes, metadata.dist.integrity, metadata.dist.shasum);
     await fs.writeFile(tarballPath, bytes, { mode: 0o600 });
-    extracted = await extractTarballPackage(tarballPath);
+    extracted = await extractTarballPackage(tarballPath, { hashOmittedFiles: options.hashOmittedFiles ?? false });
     if (extracted.identity.name !== packageRequest.name || extracted.identity.version !== version) {
       throw new Error("Tarball package identity does not match registry metadata.");
     }

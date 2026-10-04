@@ -32,6 +32,7 @@ test("distribution source is scanned and omitted text coverage is reported", asy
     await fs.writeFile(path.join(root, "large.js"), "a".repeat(1024));
     const pkg = await extractLocalPackage(root, { maxTextBytes: 128 });
     assert.ok(pkg.files.some((file) => file.path === "dist/index.js" && file.content));
+    assert.equal(pkg.files.find(file => file.path === "large.js")?.contentHash, undefined);
     const { scanExtractedPackage } = await import("../scan.js");
     const report = scanExtractedPackage(pkg);
     assert.ok("coverage" in report);

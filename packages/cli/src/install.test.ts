@@ -63,7 +63,7 @@ test("installer uses exact verified bytes and disables root and transitive scrip
     }
     const direct = bodies.get("/direct.tgz")!;
     packument = { name: "synthetic-direct", "dist-tags": { latest: "1.0.0" }, versions: { "1.0.0": { name: "synthetic-direct", version: "1.0.0", dist: { tarball: `${registry}/direct.tgz`, integrity: `sha512-${createHash("sha512").update(direct).digest("base64")}` } } } };
-    const result = await command(["install", "synthetic-direct", "--registry", registry, "--force", "--json"], project, { ...process.env, npm_config_ignore_scripts: "false", npm_config_cache: path.join(root, "npm-cache") });
+    const result = await command(["install", "synthetic-direct", "--registry", registry, "--force", "--json"], project, { ...process.env, npm_config_ignore_scripts: "false", npm_config_global: "true", npm_config_prefix: path.join(root, "diverted-prefix"), npm_config_cache: path.join(root, "npm-cache") });
     assert.equal(result.code, 0, result.stderr);
     const report = JSON.parse(result.stdout);
     assert.equal(report.coverage.dependenciesAnalyzed, false);

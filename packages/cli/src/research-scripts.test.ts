@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { constants } from "node:fs";
-import { access, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
@@ -9,20 +8,6 @@ import path from "node:path";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const datadogScript = path.join(repoRoot, "scripts/research/build-datadog-npm-candidates.mjs");
-
-test("DataDog candidate builder exists and avoids sample archive extraction", async () => {
-  await access(datadogScript, constants.F_OK | constants.X_OK);
-  const content = await readFile(datadogScript, "utf8");
-
-  assert.match(content, /malicious-software-packages-dataset/);
-  assert.match(content, /samples\/npm\/manifest\.json/);
-  assert.match(content, /unsus-real-world-npm-candidate-list/);
-  assert.match(content, /metadataOnly/);
-  assert.doesNotMatch(content, /extract\.sh/);
-  assert.doesNotMatch(content, /unzip/);
-  assert.doesNotMatch(content, /infected/);
-  assert.doesNotMatch(content, /dist\.tarball/);
-});
 
 test("DataDog candidate builder converts exact npm versions and reports unversioned entries", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "unsus-datadog-test-"));

@@ -15,8 +15,8 @@ async function walk(directory) {
       continue;
     }
 
-    if (entry.isFile() && entry.name.endsWith(".test.js") && absolutePath.includes(`${path.sep}dist${path.sep}`)) {
-      testFiles.push(absolutePath);
+    if (entry.isFile() && entry.name.endsWith(".test.ts") && absolutePath.includes(`${path.sep}src${path.sep}`)) {
+      testFiles.push(absolutePath.replace(`${path.sep}src${path.sep}`, `${path.sep}dist${path.sep}`).replace(/\.ts$/, ".js"));
     }
   }
 }

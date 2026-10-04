@@ -14,6 +14,7 @@ export interface ExtractTarballOptions {
   identity?: PackageIdentity;
   maxExtractedBytes?: number;
   maxEntries?: number;
+  hashOmittedFiles?: boolean;
 }
 
 export async function extractTarballPackage(
@@ -56,7 +57,7 @@ export async function extractTarballPackage(
       if (entry.size > 10 * 1024 * 1024 || size > (options.maxExtractedBytes ?? 100 * 1024 * 1024) || entries > (options.maxEntries ?? 10_000)) throw new Error("Archive exceeds extraction limit.");
     } });
     tar.x({ file: archivePath, cwd: packageRoot, strip: 1, sync: true, strict: true, noChmod: true, noMtime: true });
-    const extracted = await extractLocalPackage(packageRoot);
+    const extracted = await extractLocalPackage(packageRoot, { hashOmittedFiles: options.hashOmittedFiles ?? false });
     return {
       ...extracted,
       identity: { ...extracted.identity, ...options.identity },

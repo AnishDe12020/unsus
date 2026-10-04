@@ -47,3 +47,17 @@ test("entropy, IOC, and binary analyzers report high-signal static findings", as
   assert.ok(analyzeIocs(envNetwork).some((finding) => finding.type === "url_literal"));
   assert.equal(analyzeBinary(envNetwork).some((finding) => finding.category === "binary_payload"), false);
 });
+
+test("execution signals distinguish regex, comments and declarations from imported child-process calls", async () => {
+  const pkg = await extractLocalPackage(path.join(repoRoot, "fixtures/benign/normal-package"));
+  const inspect = (file: string, content: string) => analyzeAst({ ...pkg, files: [{ path: file, content, size: content.length, kind: "source" }] });
+  assert.deepEqual(inspect("index.js", 'const re = /hello/; re.exec("hello"); // eval("documentation"); process.env.SECRET\nconst example = "spawn(command)";'), []);
+  assert.deepEqual(inspect("index.d.ts", 'declare function exec(command: string): void; /** eval(code); process.env.SECRET */'), []);
+  const actual = inspect("index.js", 'import { exec as run } from "node:child_process"; run("echo fixture"); /x/.exec("x");');
+  assert.equal(actual.filter(finding => finding.type === "child_process_execution").length, 1);
+  assert.ok(actual.some(finding => finding.type === "child_process_import"));
+  const blob = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".repeat(4);
+  const typedSource = `// "${blob}"\n@decorator\nclass Example { payload = "${blob}"; }`;
+  const tail = analyzeEntropy({ ...pkg, files: [{ path: "decorated.ts", content: typedSource, size: typedSource.length, kind: "source" }] });
+  assert.equal(tail.filter(finding => finding.type === "high_entropy_string").length, 1);
+});

@@ -101,3 +101,8 @@ test("scoring blocks install-time execution combined with large aggregate source
   assert.ok(["high", "critical"].includes(riskLevelFromScore(score)));
   assert.equal(decisionFromPolicy(riskLevelFromScore(score), defaultPolicy), "block");
 });
+
+test("unrelated documentation entropy and address literals do not turn an isolated capability into a blocking chain", () => {
+  const findings = [finding("code_execution", "child_process_import", "danger"), ...Array.from({ length: 40 }, () => finding("obfuscation", "high_entropy_string", "warning", { file: "README.md", evidence: { length: 90, entropy: 4.5 } })), finding("network_access", "ip_literal", "info")];
+  assert.equal(decisionFromPolicy(riskLevelFromScore(calculateRiskScore(findings)), defaultPolicy), "warn");
+});

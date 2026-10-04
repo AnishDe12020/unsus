@@ -72,8 +72,15 @@ test("scan recognizes a positional target after boolean flags", () => {
 });
 
 test("scan rejects invalid fail-on levels and unknown options", () => {
-  for (const args of [["--fail-on", "hgh"], ["--dyanmic"]]) {
+  for (const args of [["--fail-on", "hgh"], ["--dyanmic"], ["extra-target"]]) {
     const result = spawnSync(process.execPath, [cliPath, "scan", path.join(repoRoot, "fixtures/benign/normal-package"), ...args], { encoding: "utf8" });
     assert.equal(result.status, 3, result.stderr);
   }
+});
+
+
+test("diff rejects missing option values before resolving packages", () => {
+  const result = spawnSync(process.execPath, [cliPath, "diff", "ms@2.1.3", "--against", "--json"], { encoding: "utf8" });
+  assert.equal(result.status, 3);
+  assert.match(result.stderr, /--against requires a value/);
 });

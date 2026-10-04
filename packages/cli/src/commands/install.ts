@@ -67,7 +67,7 @@ export async function runInstallCommand(args: string[]): Promise<number> {
 
 function runPackageManagerInstall(archive: string, registry: string | undefined, json: boolean): Promise<number> {
   return new Promise((resolve, reject) => {
-    const child = spawn("npm", ["install", "--ignore-scripts", "--save-exact", "--no-audit", "--no-fund", ...(registry ? ["--registry", registry] : []), "--", `./${archive}`], {
+    const child = spawn("npm", ["install", "--global=false", "--prefix", process.cwd(), "--ignore-scripts", "--save-exact", "--no-audit", "--no-fund", ...(registry ? ["--registry", registry] : []), "--", `./${archive}`], {
       // Keep --json stdout machine-readable; npm status belongs on stderr.
       stdio: ["inherit", json ? 2 : "inherit", "inherit"],
       env: { ...process.env, npm_config_ignore_scripts: "true" }
