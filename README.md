@@ -4,6 +4,18 @@ Inspect an npm package before installing it, and keep installation scripts off.
 
 `unsus` is a heuristic scanner and guarded npm installer. The v0.1 release candidate scans a **direct package**, verifies its registry archive, and installs those exact bytes with `npm --ignore-scripts`. It does not certify that a package is safe, scan the dependency graph, or protect you when you later import or execute installed code.
 
+## Download the compiled CLI
+
+Download `unsus-0.1.0.tar.gz` and its `.sha256` file from [GitHub Releases](https://github.com/AnishDe12020/unsus/releases). Requires **Node.js 22+**; the kit includes compiled code and runtime dependencies, so no build or npm package publication is needed.
+
+```sh
+shasum -a 256 -c unsus-0.1.0.tar.gz.sha256
+tar -xzf unsus-0.1.0.tar.gz
+./unsus-0.1.0/bin/unsus --help
+```
+
+On Windows, extract the archive and run `node unsus-0.1.0/bin/unsus --help`. On macOS/Linux, move the whole extracted directory somewhere permanent and add its `bin` directory to `PATH`, or symlink `bin/unsus` into a directory already on `PATH`. Keep the entire kit together. Local static scans work offline; registry scans need network access, guarded installs also need npm, and dynamic observation needs Docker.
+
 ## Try it from source
 
 Requires Node.js 22 or newer and npm. Docker is needed only for optional dynamic observation.
@@ -17,7 +29,7 @@ node packages/cli/dist/index.js --help
 node packages/cli/dist/index.js scan fixtures/benign/normal-package --json
 ```
 
-The publishable packages are `@unsus/core`, `@unsus/sandbox`, and `@unsus/cli`, version `0.1.0`. This checkout is release preparation; registry publication is a separate step. `npm run verify:release` packs all three and verifies an installation in a clean temporary consumer project. It does not publish anything.
+The publishable packages are `@unsus/core`, `@unsus/sandbox`, and `@unsus/cli`, version `0.1.0`. npm registry publication is a separate step; the downloadable kit works without it. `npm run package:release` writes a verified archive and SHA-256 file to `artifacts/release/`. `npm run verify:release` exercises the same build in a temporary directory. Both pack all three workspaces, install their locked runtime dependency versions with scripts disabled, then verify the extracted kit. Neither publishes anything.
 
 To use the checkout's CLI in another project, invoke its absolute path:
 
@@ -35,6 +47,8 @@ unsus scan <registry-package> --dynamic --allow-remote-dynamic
 unsus diff <new-target> --against <old-target> [--json]
 unsus install <registry-package> [--registry URL] [--dynamic] [--yes] [--force] [--json]
 unsus explain <report.json>
+unsus --version
+unsus <command> --help
 ```
 
 `scan` and `diff` accept local directories and registry names, exact versions, or supported semver ranges. Scanning never runs package code unless dynamic observation is explicitly requested. The installer supports **npm only**; it rejects local paths, Git URLs, tarball URLs, bun and pnpm with an error. It does not forward arbitrary npm flags.

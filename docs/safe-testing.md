@@ -30,7 +30,7 @@ Dynamic analysis must run only inside Docker with:
 - no home directory, SSH, npm, GitHub, or cloud config mounts
 - sanitized environment variables
 
-Current implementation note: local `scan --dynamic` can execute detected lifecycle scripts inside Docker and return a sandbox timeline. Remote npm dynamic scans and real malicious package benchmarks must run through the disposable GCloud workflow.
+Local `scan --dynamic` can execute lifecycle scripts inside Docker and return a sandbox timeline. Registry scans require an additional `--allow-remote-dynamic` opt-in; `install --dynamic` explicitly opts in for its registry package. These switches do not make hostile samples safe. Real malicious-package experiments belong in the separately reviewed disposable GCloud workflow, never routine development or CI.
 
 ## When to Use Cloud VMs
 

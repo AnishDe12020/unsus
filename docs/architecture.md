@@ -1,29 +1,26 @@
 # Architecture
 
-`unsus` is organized as an npm workspace with three packages.
+`unsus` is an npm workspace with three packages, targeting Node.js 22 or newer.
 
-- `@unsus/core` resolves, extracts, analyzes, scores, diffs, and reports on packages without executing package code.
-- `@unsus/sandbox` owns Docker-based dynamic analysis and timeline capture.
-- `@unsus/cli` provides the `unsus` command surface and delegates safety decisions to core.
+- `@unsus/core` resolves, extracts, analyzes, scores, diffs, and reports on direct packages without executing their code.
+- `@unsus/sandbox` provides optional Docker lifecycle-script observation.
+- `@unsus/cli` provides scan, diff, guarded npm install, and saved-report rendering.
 
-The core package is intentionally usable from Node-compatible runtimes. Bun can be used for developer speed, but runtime logic avoids Bun-specific APIs.
+## Scan and install flow
 
-## Current Flow
+1. A scan resolves a local directory or registry request. The installer accepts only a registry package request.
+2. Registry resolution fetches metadata and archive bytes over HTTPS, verifies integrity and identity, and extracts with path, entry, and inflation limits.
+3. Static heuristics inspect bounded file contents and lifecycle metadata. Omitted text files make the scan require review. Dependencies are not analyzed.
+4. Findings produce an allow, warn, or block decision. These decisions are heuristic; they cannot establish safety.
+5. Explicit dynamic observation runs lifecycle scripts in a copied Docker workspace. Networking is disabled and dependencies are not installed. Requested observation fails if Docker cannot run or teardown cannot be confirmed.
+6. A guarded install retains the exact scanned archive under the project's `.unsus/artifacts/` and runs npm against it with `--ignore-scripts`. Warnings require `--yes`; a blocked scan requires `--force`. Neither override enables scripts or bypasses integrity errors.
 
-1. CLI resolves a local path or npm package request.
-2. Core fetches package metadata/tarballs without executing lifecycle scripts.
-3. Core extracts into a temporary directory and collects bounded file contents.
-4. Pure analyzers emit behavioral findings.
-5. Scoring converts behavior chains into allow, warn, or block decisions.
-6. If `--dynamic` is enabled and a sandbox runner is configured, lifecycle scripts execute only inside a hardened Docker container and produce a timeline.
-7. `unsus install` delegates to the selected package manager only after the scan decision permits it or the user forces an override.
+The archive remains a relative `file:` dependency in the project's manifest and lockfile. Users must retain it. npm resolves transitive dependencies; unsus does not scan those bytes. Later imports, execution, and installs without `--ignore-scripts` are outside this protection.
 
-## Research Scripts
+## Distribution
 
-Research helpers under `scripts/research/` are intentionally outside the core product packages. They support real-world test sourcing by:
+`npm run package:release` packs the three compiled workspaces, installs their runtime dependencies at versions pinned by the repository lockfile with scripts disabled, and emits a portable archive plus SHA-256 checksum. The kit includes dependency licenses and the package archives. It needs Node.js, but no build or npm registry publication, to run. Verification exercises the extracted kit from an unrelated directory.
 
-- building npm candidate lists from the DataDog malicious package dataset manifest;
-- checking live npm metadata availability without downloading tarballs;
-- producing ignored manifests for the disposable GCloud runner.
+## Research scripts
 
-They must not extract malicious sample archives, fetch npm tarballs locally, or execute package code.
+`docs/` and `scripts/research/` also contain historical sample-sourcing and disposable-lab workflows. They are outside the v0.1 product path. Research helpers build candidate lists and check metadata availability; they must not extract or execute malicious samples on a development machine.
