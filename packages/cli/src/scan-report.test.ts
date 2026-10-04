@@ -56,7 +56,7 @@ test("invalid formats and failed report writes fail operationally without clobbe
     ]) {
       const result = scan(benign, ...args);
       assert.equal(result.status, 3, result.stderr);
-      assert.equal(result.stdout, "");
+      if (result.stdout) assert.equal(JSON.parse(result.stdout).error.code, "OPERATIONAL_ERROR");
     }
     const missingParent = scan(blocked, "--format", "sarif", "--output", path.join(root, "missing", "report.sarif"));
     assert.equal(missingParent.status, 3);

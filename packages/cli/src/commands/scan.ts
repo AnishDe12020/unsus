@@ -7,7 +7,7 @@ export async function runScanCommand(args: string[]): Promise<number> {
   const seen = new Set<string>();
   for (let index = 0; index < args.length; index++) {
     const arg = args[index]!;
-    if (["--format", "--output", "--fail-on"].includes(arg)) {
+    if (["--format", "--output", "--fail-on", "--registry"].includes(arg)) {
       if (seen.has(arg)) throw new Error(`Duplicate scan option: ${arg}`);
       seen.add(arg);
     }
@@ -15,6 +15,8 @@ export async function runScanCommand(args: string[]): Promise<number> {
       if (!["safe", "low", "medium", "high", "critical"].includes(args[++index] ?? "")) throw new Error("--fail-on requires safe, low, medium, high, or critical.");
     } else if (arg === "--format") {
       if (!["text", "json", "sarif"].includes(args[++index] ?? "")) throw new Error("--format requires text, json, or sarif.");
+    } else if (arg === "--registry") {
+      if (!args[++index] || args[index]!.startsWith("-")) throw new Error("--registry requires a URL.");
     } else if (arg === "--output") {
       if (!args[++index] || args[index]!.startsWith("-")) throw new Error("--output requires a file path (use ./ for filenames beginning with a dash).");
     } else if (arg.startsWith("-") && !["--json", "--dynamic", "--no-dynamic", "--allow-remote-dynamic"].includes(arg)) throw new Error(`Unknown scan option: ${arg}`);
@@ -31,6 +33,7 @@ export async function runScanCommand(args: string[]): Promise<number> {
   const format = requestedFormat ?? (args.includes("--json") ? "json" : "text");
   if (format === "sarif" && dynamic) throw new Error("SARIF reporting supports static scans only; omit --dynamic.");
   const result = await scanTarget(target, {
+    ...(readOption(args, "--registry") ? { registry: readOption(args, "--registry")! } : {}),
     dynamic,
     allowRemoteDynamic: args.includes("--allow-remote-dynamic"),
     ...(dynamic

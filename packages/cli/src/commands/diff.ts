@@ -3,10 +3,13 @@ import { diffTargets, formatDiffText, formatJsonReport } from "@unsus/core";
 import { positionalArguments, readOption } from "./scan.js";
 
 export async function runDiffCommand(args: string[]): Promise<number> {
+  const seen = new Set<string>();
   for (let index = 0; index < args.length; index++) {
     const arg = args[index]!;
-    if (arg === "--against") {
-      if (!args[index + 1] || args[index + 1]!.startsWith("--")) throw new Error("--against requires a value.");
+    if (arg === "--against" || arg === "--registry") {
+      if (seen.has(arg)) throw new Error(`Duplicate diff option: ${arg}`);
+      seen.add(arg);
+      if (!args[index + 1] || args[index + 1]!.startsWith("--")) throw new Error(`${arg} requires a value.`);
       index++;
     } else if (arg.startsWith("-") && arg !== "--json") throw new Error(`Unknown diff option: ${arg}`);
   }
@@ -18,7 +21,8 @@ export async function runDiffCommand(args: string[]): Promise<number> {
     throw new Error("Usage: unsus diff <pkg>@<new> --against <pkg>@<old> [--json]");
   }
 
-  const result = await diffTargets(target, against);
+  const registry = readOption(args, "--registry");
+  const result = await diffTargets(target, against, registry ? { registry } : {});
   process.stdout.write(args.includes("--json") ? formatJsonReport(result) : formatDiffText(result));
   if (result.findings.some((finding) => finding.severity === "danger" || finding.severity === "critical")) {
     return 2;

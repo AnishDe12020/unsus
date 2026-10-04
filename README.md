@@ -41,10 +41,11 @@ node /path/to/unsus/packages/cli/dist/index.js install package-name@1.2.3
 ## Commands
 
 ```sh
-unsus scan <directory-or-registry-package> [--format text|json|sarif] [--output PATH] [--json] [--fail-on high]
+unsus scan <directory-or-registry-package> [--registry URL] [--format text|json|sarif] [--output PATH] [--json] [--fail-on high]
 unsus scan <directory> --dynamic
 unsus scan <registry-package> --dynamic --allow-remote-dynamic
-unsus diff <new-target> --against <old-target> [--json]
+unsus diff <new-target> --against <old-target> [--registry URL] [--json]
+unsus project [directory] [--json] [--include-dev] [--max-packages N]
 unsus install <registry-package> [--registry URL] [--dynamic] [--yes] [--force] [--json]
 unsus explain <report.json>
 unsus --version
@@ -54,6 +55,21 @@ unsus <command> --help
 `scan` and `diff` accept local directories and registry names, exact versions, or supported semver ranges. Scanning never runs package code unless dynamic observation is explicitly requested. The installer supports **npm only**; it rejects local paths, Git URLs, tarball URLs, bun and pnpm with an error. It does not forward arbitrary npm flags.
 
 Exit codes are **0** allowed/completed, **1** warning requiring review, **2** blocked, and **3** operational failure. An `allow` decision means no blocking rule matched. It is not a safety certificate. JSON reports include direct-package coverage and omitted text files. Installer JSON stays on stdout; npm progress and installation guidance go to stderr.
+
+In JSON mode, operational failures emit one document: `{"ok":false,"exitCode":3,"error":{"code":"OPERATIONAL_ERROR","message":"…"}}`. A failed npm install uses `INSTALL_FAILED` and includes its completed scan as `report`; install JSON is emitted after the operation finishes. With `--output` or SARIF, operational error JSON goes to stderr and leaves any previous report file untouched. Policy warnings and blocks remain ordinary reports with exits **1/2**.
+
+## Inspect an installed project
+
+```sh
+unsus project . --include-dev --max-packages 30 --json
+unsus project . --format json --output /existing/report-directory/project.json
+```
+
+`project` inspects the installed copies of declared `dependencies` and `optionalDependencies`; `--include-dev` also includes development dependencies. It works offline and never installs packages, executes their code, or changes manifests or lockfiles. Reports identify their source as `installed-node_modules`: installed files are **not** verified against a registry or lockfile. Project source, peer-only declarations and transitive dependencies are outside its scope.
+
+Only semver declarations with matching installed names and versions are scanned. Missing or linked packages and version mismatches are `unresolved`; tags, aliases, workspace/file/Git references and packages beyond the limits are `omitted`. Each attempted package is limited to 10,000 filesystem entries and 100 MiB of file sizes, with the usual 256 KiB text-read limit. The default is 20 attempted packages in name order, adjustable from 1 to 100; missing packages also consume that limit. `coverage` reports every selected declaration and the scanned, unresolved, omitted and failed counts.
+
+Any blocked package makes the aggregate decision `block`; gaps or warnings make it at least `warn`. An inspection failure takes exit **3** even if another package blocks; otherwise block is **2**, warning/incomplete coverage **1**, and fully inspected selected dependencies with no warnings **0**. `--fail-on` sets the per-package policy threshold. Project reports support text and JSON; `explain` accepts single-package scan and diff reports only.
 
 ## Reports for CI
 
@@ -90,7 +106,7 @@ Later installs must also use `npm ci --ignore-scripts` or `npm install --ignore-
 
 Static heuristics inspect lifecycle metadata, source patterns with JavaScript token context, imported child-process bindings, credential/network/filesystem access patterns, dynamic evaluation, obfuscation, binary indicators and version changes. Comments, string examples and TypeScript declaration files do not count as executed API calls. This is not full semantic or data-flow analysis: unusual aliases, computed properties, shadowed bindings and unsupported typed-source syntax can be missed or misclassified; an unparsed tail falls back to conservative pattern matching. Isolated capabilities and accumulated documentation noise require review rather than automatically blocking. Explicit behavioral chains and dense-source obfuscation rules still block. Published `dist/` files are included. Individual text files above 256 KiB or containing NUL bytes are omitted and make the report warn. Unknown formats receive limited inspection. Version diffs hash complete contents, including omitted text and binaries, so local diffs can read large files in full; ordinary scans keep bounded text/header reads. Local `.git`, `node_modules` and symbolic links are skipped; bundled dependencies inside `node_modules` are not analyzed.
 
-Registry downloads and metadata are capped at 20 MiB with a 30-second request timeout. Archive inflation is capped at 100 MiB, individual entries at 10 MiB and entries at 10,000. Links, special files, traversal, duplicate/case-colliding paths and inconsistent package identities are rejected. These conservative limits may reject legitimate packages. Registry metadata and tarball URLs must use HTTPS, must not contain credentials, and redirects are rejected. The only HTTP exception is the explicitly configured loopback registry origin. Private registry authentication and registries requiring redirects are not supported in this release. The default is `https://registry.npmjs.org`; installer `--registry` supports compatible registries (HTTP is allowed only for explicitly configured loopback testing).
+Registry downloads and metadata are capped at 20 MiB with a 30-second request timeout. Archive inflation is capped at 100 MiB, individual entries at 10 MiB and entries at 10,000. Links, special files, traversal, duplicate/case-colliding paths and inconsistent package identities are rejected. These conservative limits may reject legitimate packages. Registry metadata and tarball URLs must use HTTPS, must not contain credentials, and redirects are rejected. The only HTTP exception is the explicitly configured loopback registry origin. Private registry authentication and registries requiring redirects are not supported in this release. The default is `https://registry.npmjs.org`; `scan`, `diff`, and `install` accept `--registry URL` for compatible registries with the same restrictions. For diffs, this registry applies to both registry targets; local targets remain local.
 
 Dynamic observation runs lifecycle scripts in a copied workspace with Docker networking disabled, limited CPU/memory/processes, no host credentials passed as environment variables, and a read-only container root. Prepare the image with `docker pull node:22-bookworm-slim`. Docker absence, daemon failure and launch failure stop a requested dynamic run; execution never falls back to the host. Containers are created before scripts start. Every started container is removed with a bounded deadline and its absence is confirmed before workspace cleanup. If creation or teardown cannot be confirmed, the command fails and retains the named temporary workspace for manual cleanup. Remote dynamic scans require `--allow-remote-dynamic`; `install --dynamic` explicitly opts in for that registry package. Dynamic mode does not install dependencies and may report build failures from missing tools.
 

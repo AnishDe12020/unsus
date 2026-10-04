@@ -4,7 +4,7 @@
 
 - `@unsus/core` resolves, extracts, analyzes, scores, diffs, and reports on direct packages without executing their code.
 - `@unsus/sandbox` provides optional Docker lifecycle-script observation.
-- `@unsus/cli` provides scan, diff, guarded npm install, and saved-report rendering.
+- `@unsus/cli` provides scan, diff, offline project inspection, guarded npm install, and saved-report rendering.
 
 ## Scan and install flow
 
@@ -16,6 +16,8 @@
 6. A guarded install retains the exact scanned archive under the project's `.unsus/artifacts/` and runs npm against it with `--ignore-scripts`. Warnings require `--yes`; a blocked scan requires `--force`. Neither override enables scripts or bypasses integrity errors.
 
 The archive remains a relative `file:` dependency in the project's manifest and lockfile. Users must retain it. npm resolves transitive dependencies; unsus does not scan those bytes. Later imports, execution, and installs without `--ignore-scripts` are outside this protection.
+
+`project` follows a separate offline path: read a bounded project manifest, select declared direct dependencies, and inspect matching regular directories under that project's `node_modules`. Linked packages and unsupported specifications are explicit coverage gaps. Package count, entry count and total file sizes are bounded. No resolver, installer, lockfile writer or dynamic runner is invoked. Reports retain per-package findings and coverage; an operational inspection failure takes exit 3 ahead of policy exits, while any gap prevents an aggregate allow. Registry and lockfile integrity are unverified.
 
 ## Distribution
 
