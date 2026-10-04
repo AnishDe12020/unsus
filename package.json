@@ -16,7 +16,8 @@
     "samples:datadog-npm": "node scripts/research/build-datadog-npm-candidates.mjs",
     "samples:check-npm": "node scripts/research/check-npm-sample-availability.mjs",
     "lint": "tsc -b packages/core packages/sandbox packages/cli --pretty false",
-    "verify:release": "npm run build && node scripts/verify-release.mjs"
+    "verify:release": "npm run build && node scripts/verify-release.mjs",
+    "package:release": "npm run build && node scripts/package-release.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.15.29",
