@@ -47,7 +47,7 @@ function printHelp(): void {
   console.log(`unsus - heuristic package scanner and guarded npm installer
 
 Usage:
-  unsus scan <target> [--json] [--dynamic] [--no-dynamic] [--allow-remote-dynamic] [--fail-on high]
+  unsus scan <target> [--format text|json|sarif] [--output PATH] [--json] [--dynamic] [--fail-on high]
   unsus diff <pkg>@<new> --against <pkg>@<old> [--json]
   unsus install <registry-package> [--registry URL] [--dynamic] [--force] [--json] [--yes]
   unsus explain <report.json>
@@ -61,13 +61,16 @@ const commandHelp: Record<string, string> = {
   scan: `Usage: unsus scan <directory-or-registry-package> [options]
 
 Inspect a direct package without executing its code by default.
-  --json                  Emit a machine-readable report
+  --format <format>       text (default), json, or sarif (static scans only)
+  --json                  Alias for --format json
+  --output <PATH>         Atomically save the report instead of writing stdout
   --fail-on <level>        Block at safe, low, medium, high, or critical (default: high)
   --dynamic               Observe lifecycle scripts in Docker
   --no-dynamic            Disable observation, overriding --dynamic
   --allow-remote-dynamic   Permit Docker observation of a registry package
 
-Example: unsus scan lodash@4.17.21 --json
+Example: unsus scan . --format sarif --output report.sarif
+Output parent directories must exist; existing reports are replaced after a successful write.
 Dependencies are not scanned. Exit codes: 0 allowed, 1 review, 2 blocked, 3 failure.`,
   diff: `Usage: unsus diff <new-target> --against <old-target> [--json]
 

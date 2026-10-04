@@ -41,7 +41,7 @@ node /path/to/unsus/packages/cli/dist/index.js install package-name@1.2.3
 ## Commands
 
 ```sh
-unsus scan <directory-or-registry-package> [--json] [--fail-on high]
+unsus scan <directory-or-registry-package> [--format text|json|sarif] [--output PATH] [--json] [--fail-on high]
 unsus scan <directory> --dynamic
 unsus scan <registry-package> --dynamic --allow-remote-dynamic
 unsus diff <new-target> --against <old-target> [--json]
@@ -54,6 +54,26 @@ unsus <command> --help
 `scan` and `diff` accept local directories and registry names, exact versions, or supported semver ranges. Scanning never runs package code unless dynamic observation is explicitly requested. The installer supports **npm only**; it rejects local paths, Git URLs, tarball URLs, bun and pnpm with an error. It does not forward arbitrary npm flags.
 
 Exit codes are **0** allowed/completed, **1** warning requiring review, **2** blocked, and **3** operational failure. An `allow` decision means no blocking rule matched. It is not a safety certificate. JSON reports include direct-package coverage and omitted text files. Installer JSON stays on stdout; npm progress and installation guidance go to stderr.
+
+## Reports for CI
+
+Static scans can emit [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html), JSON, or text. With the CLI on `PATH`, run this in the package directory being checked:
+
+```sh
+# Create the report outside the scanned directory to avoid scanning old reports.
+report_dir="$(mktemp -d)"
+status=0
+unsus scan . --format sarif --output "$report_dir/unsus.sarif" || status=$?
+# Retain this report with your CI system's artifact step; unsus never uploads it.
+printf 'Report: %s\n' "$report_dir/unsus.sarif"
+exit "$status"
+```
+
+Report files are replaced atomically; the parent directory must already exist. A report write failure exits **3**, while a successfully saved report preserves the scan's **0/1/2** policy status. `--output` leaves stdout empty. `--json` remains an alias for `--format json`; conflicting formats are rejected.
+
+SARIF includes rule metadata, severity, valid observed locations, and explicit direct-package coverage. File URIs are relative to the **scanned package**, using `%PACKAGE_ROOT%`; configure that base in your viewer. A registry package's files are not automatically locations in your CI checkout. Line numbers are included only when recorded by the analyzer. `unsus/matchedEvidence/v1` is a partial fingerprint hashing the rule type and matched evidence, independent of line number. It is omitted when evidence or a safe relative location is unavailable.
+
+SARIF excludes source snippets, raw finding messages, environment variables, registry URLs, and absolute machine paths. Use JSON locally when full finding evidence is needed. SARIF is static-only: combine dynamic observation with text or JSON instead. No format expands scan coverage or establishes that a package is safe.
 
 ## What a guarded install does
 

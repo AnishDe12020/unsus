@@ -67,6 +67,9 @@ export async function packageRelease(outputDirectory) {
     const report = JSON.parse(run(process.execPath, [cli, 'scan', fixture, '--json'], consumer));
     assert.equal(report.package.name, 'normal-package');
     assert.equal(report.coverage.dependenciesAnalyzed, false);
+    const sarifPath = path.join(consumer, 'report.sarif');
+    assert.equal(run(process.execPath, [cli, 'scan', fixture, '--format', 'sarif', '--output', sarifPath], consumer), '');
+    assert.equal(JSON.parse(await readFile(sarifPath, 'utf8')).version, '2.1.0');
     const reportPath = path.join(scratch, 'report.json');
     await writeFile(reportPath, JSON.stringify(report));
     assert.match(run(process.execPath, [cli, 'explain', reportPath], consumer), /normal-package/);
