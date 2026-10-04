@@ -1,6 +1,6 @@
 {
   "name": "@unsus/cli",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "bin": {
     "unsus": "./dist/index.js"
@@ -16,7 +16,31 @@
     "test": "node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
-    "@unsus/core": "0.0.0",
-    "@unsus/sandbox": "0.0.0"
-  }
+    "@unsus/core": "0.1.0",
+    "@unsus/sandbox": "0.1.0"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AnishDe12020/unsus.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/AnishDe12020/unsus/issues"
+  },
+  "homepage": "https://github.com/AnishDe12020/unsus#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
+  "description": "Heuristic npm package scanning and an installer that disables lifecycle scripts."
 }

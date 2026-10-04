@@ -111,3 +111,22 @@ function workspacePathFromArgs(args: string[]): string {
   assert.ok(src);
   return src;
 }
+
+test("sandbox rejects copied symbolic links without changing external file permissions", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "unsus-test-sandbox-"));
+  try {
+    const source = path.join(root, "source");
+    await fs.mkdir(source);
+    const outside = path.join(root, "outside.txt");
+    await fs.writeFile(outside, "fixture", { mode: 0o600 });
+    await fs.symlink(outside, path.join(source, "link"));
+    await assert.rejects(runLifecycleScriptsInDockerSandbox({ sourceRootPath: source, packageJson: { scripts: { postinstall: "echo fixture" } }, dockerExecutor: async () => ({ exitCode: 0, stdout: "", stderr: "", timedOut: false }) }), /symbolic link/i);
+    assert.equal((await fs.stat(outside)).mode & 0o777, 0o600);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
+
+test("sandbox treats Docker exit 125 as infrastructure failure", async () => {
+  await assert.rejects(runLifecycleScriptsInDockerSandbox({ sourceRootPath: path.join(repoRoot, "fixtures/benign/install-script-build-package"), packageJson: { scripts: { postinstall: "echo fixture" } }, dockerExecutor: async () => ({ exitCode: 125, stdout: "", stderr: "image unavailable", timedOut: false }) }), /infrastructure failure/i);
+});

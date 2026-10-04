@@ -64,3 +64,16 @@ test("CLI diff exits 0 when no block-level risk is detected", () => {
 
   assert.equal(result.status, 0, result.stderr);
 });
+
+test("scan recognizes a positional target after boolean flags", () => {
+  const result = spawnSync(process.execPath, [cliPath, "scan", "--json", path.join(repoRoot, "fixtures/benign/normal-package")], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).package.name, "normal-package");
+});
+
+test("scan rejects invalid fail-on levels and unknown options", () => {
+  for (const args of [["--fail-on", "hgh"], ["--dyanmic"]]) {
+    const result = spawnSync(process.execPath, [cliPath, "scan", path.join(repoRoot, "fixtures/benign/normal-package"), ...args], { encoding: "utf8" });
+    assert.equal(result.status, 3, result.stderr);
+  }
+});

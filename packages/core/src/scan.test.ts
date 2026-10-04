@@ -61,3 +61,15 @@ test("dynamic scan includes sandbox findings and still blocks suspicious install
   assert.equal(result.decision, "block");
   assert.ok(result.findings.some((finding) => finding.type === "network_detection_unsupported"));
 });
+
+test("dynamic results preserve strict fail-on policy when text coverage is incomplete", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "unsus-test-coverage-"));
+  try {
+    await fs.writeFile(path.join(root, "package.json"), '{"name":"fixture","version":"1.0.0"}');
+    await fs.writeFile(path.join(root, "large.js"), "a".repeat(300_000));
+    const result = await scanTarget(root, { dynamic: true, failOn: "safe", dynamicRunner: async () => ({ enabled: true, timedOut: false, timeline: [], findings: [] }) });
+    assert.equal(result.decision, "block");
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});

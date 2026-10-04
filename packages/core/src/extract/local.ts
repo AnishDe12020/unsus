@@ -4,7 +4,7 @@ import path from "node:path";
 import type { ExtractedPackage, PackageFile, PackageIdentity } from "../types.js";
 
 const DEFAULT_MAX_TEXT_BYTES = 256 * 1024;
-const SKIP_DIRS = new Set([".git", "node_modules", "dist", "coverage"]);
+const SKIP_DIRS = new Set([".git", "node_modules"]);
 const SOURCE_EXTENSIONS = new Set([
   ".js",
   ".jsx",
@@ -38,6 +38,7 @@ export async function extractLocalPackage(
 ): Promise<ExtractedPackage> {
   const resolvedRoot = path.resolve(rootPath);
   const packageJsonPath = path.join(resolvedRoot, "package.json");
+  if ((await fs.stat(packageJsonPath)).size > DEFAULT_MAX_TEXT_BYTES) throw new Error("package.json exceeds text byte limit.");
   const packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf8")) as Record<string, unknown>;
   const identity = identityFromPackageJson(packageJson);
   const files = await collectPackageFiles(resolvedRoot, options);

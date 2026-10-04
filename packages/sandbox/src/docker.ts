@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { chmod, cp, mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import { chmod, cp, mkdtemp, readdir, rm, stat, lstat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -67,7 +67,7 @@ export interface LifecycleSandboxOptions {
 }
 
 const LIFECYCLE_ORDER = ["preinstall", "install", "postinstall", "prepare"];
-const SKIP_DIRS = new Set([".git", "node_modules", "dist", "coverage"]);
+const SKIP_DIRS = new Set([".git", "node_modules"]);
 const OUTPUT_LIMIT = 4096;
 
 export async function runLifecycleScriptsInDockerSandbox(options: LifecycleSandboxOptions): Promise<SandboxResult> {
@@ -136,7 +136,7 @@ export async function runLifecycleScriptsInDockerSandbox(options: LifecycleSandb
         containerName
       });
 
-      if (isDockerInfrastructureFailure(result.stderr)) {
+      if (result.exitCode === 125 || isDockerInfrastructureFailure(result.stderr)) {
         throw new Error(`Docker sandbox infrastructure failure: ${truncate(result.stderr)}`);
       }
 
@@ -217,11 +217,19 @@ async function executeDocker(args: string[], options: { timeoutMs: number; conta
       void forceRemoveContainer(options.containerName);
     }, options.timeoutMs);
 
-    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    child.stdout.on("data", (chunk: Buffer) => {
+      if (stdoutBytes < OUTPUT_LIMIT) stdout.push(chunk.subarray(0, OUTPUT_LIMIT - stdoutBytes));
+      stdoutBytes += chunk.length;
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      if (stderrBytes < OUTPUT_LIMIT) stderr.push(chunk.subarray(0, OUTPUT_LIMIT - stderrBytes));
+      stderrBytes += chunk.length;
+    });
     child.on("error", (error) => {
       clearTimeout(timer);
-      reject(error);
+      reject(new Error(`Docker sandbox unavailable: ${error.message}. Install/start Docker and retry, or omit --dynamic for static analysis.`));
     });
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -263,13 +271,18 @@ function lifecycleScripts(packageJson: Record<string, unknown>): Array<{ name: s
 async function copyWorkspace(sourceRootPath: string, workspacePath: string): Promise<void> {
   await cp(sourceRootPath, workspacePath, {
     recursive: true,
-    filter: (source) => !SKIP_DIRS.has(path.basename(source))
+    filter: async (source) => {
+      if (SKIP_DIRS.has(path.basename(source))) return false;
+      if ((await lstat(source)).isSymbolicLink()) throw new Error("Sandbox source contains a symbolic link; refusing to copy it.");
+      return true;
+    }
   });
 }
 
 async function makeWorkspaceWritable(rootPath: string): Promise<void> {
   async function walk(currentPath: string): Promise<void> {
-    const currentStat = await stat(currentPath);
+    const currentStat = await lstat(currentPath);
+    if (currentStat.isSymbolicLink()) throw new Error("Sandbox workspace contains a symbolic link.");
     if (currentStat.isDirectory()) {
       await chmod(currentPath, 0o777);
       const entries = await readdir(currentPath, { withFileTypes: true });

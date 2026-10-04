@@ -11,6 +11,9 @@ export function formatScanText(result: ScanResult): string {
     "Why:"
   ];
 
+  if (result.coverage) {
+    lines.splice(6, 0, `Coverage: direct package only; ${result.coverage.textFilesAnalyzed} text files analyzed; ${result.coverage.omittedTextFiles.length} omitted. Dependencies not scanned.`, "Heuristic findings do not establish package safety.");
+  }
   lines.push(...formatFindings(result.findings));
   if (result.sandbox) {
     lines.push("", "Sandbox timeline:", ...formatSandboxTimeline(result));
@@ -39,7 +42,7 @@ export function formatDiffText(result: VersionDiffResult): string {
 
 function formatFindings(findings: Finding[]): string[] {
   if (findings.length === 0) {
-    return ["1. No risky behavior detected."];
+    return ["1. No matching risk signals found in analyzed files."];
   }
 
   return findings.slice(0, 20).map((finding, index) => {

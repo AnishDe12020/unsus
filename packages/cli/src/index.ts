@@ -35,12 +35,12 @@ async function main(argv: string[]): Promise<number> {
 }
 
 function printHelp(): void {
-  console.log(`unsus - local package firewall
+  console.log(`unsus - heuristic package scanner and guarded npm installer
 
 Usage:
-  unsus scan <target> [--json] [--dynamic] [--no-dynamic] [--fail-on high]
+  unsus scan <target> [--json] [--dynamic] [--no-dynamic] [--allow-remote-dynamic] [--fail-on high]
   unsus diff <pkg>@<new> --against <pkg>@<old> [--json]
-  unsus install <package> [--pm npm|bun|pnpm] [--force] [--json] [--yes]
+  unsus install <registry-package> [--registry URL] [--dynamic] [--force] [--json] [--yes]
   unsus explain <report.json>
 `);
 }
