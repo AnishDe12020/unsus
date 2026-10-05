@@ -6,15 +6,15 @@ Inspect an npm package before installing it, and keep installation scripts off.
 
 ## Download the compiled CLI
 
-Download `unsus-0.2.0.tar.gz` and its `.sha256` file from [GitHub Releases](https://github.com/AnishDe12020/unsus/releases). Requires **Node.js 22+**; the kit includes compiled code and runtime dependencies, so no build or npm package publication is needed.
+Download `unsus-0.2.1.tar.gz` and its `.sha256` file from [GitHub Releases](https://github.com/AnishDe12020/unsus/releases). Requires **Node.js 22+**; the kit includes compiled code and runtime dependencies, so no build or npm package publication is needed.
 
 ```sh
-shasum -a 256 -c unsus-0.2.0.tar.gz.sha256
-tar -xzf unsus-0.2.0.tar.gz
-./unsus-0.2.0/bin/unsus --help
+shasum -a 256 -c unsus-0.2.1.tar.gz.sha256
+tar -xzf unsus-0.2.1.tar.gz
+./unsus-0.2.1/bin/unsus --help
 ```
 
-On Windows, extract the archive and run `node unsus-0.2.0/bin/unsus --help`. On macOS/Linux, move the whole extracted directory somewhere permanent and add its `bin` directory to `PATH`, or symlink `bin/unsus` into a directory already on `PATH`. Keep the entire kit together. Local static scans work offline; registry scans need network access, guarded installs also need npm, and dynamic observation needs Docker.
+On Windows, extract the archive and run `node unsus-0.2.1/bin/unsus --help`. On macOS/Linux, move the whole extracted directory somewhere permanent and add its `bin` directory to `PATH`, or symlink `bin/unsus` into a directory already on `PATH`. Keep the entire kit together. Local static scans work offline; registry scans need network access, guarded installs also need npm, and dynamic observation needs Docker.
 
 ## Try it from source
 
@@ -29,7 +29,7 @@ node packages/cli/dist/index.js --help
 node packages/cli/dist/index.js scan fixtures/benign/normal-package --json
 ```
 
-The publishable packages are `@unsus/core`, `@unsus/sandbox`, and `@unsus/cli`, version `0.2.0`. npm registry publication is a separate step; the downloadable kit works without it. `npm run package:release` writes a verified archive and SHA-256 file to `artifacts/release/`. `npm run verify:release` exercises the same build in a temporary directory. Both pack all three workspaces, install their locked runtime dependency versions with scripts disabled, then verify the extracted kit. Neither publishes anything.
+The publishable packages are `@unsus/core`, `@unsus/sandbox`, and `@unsus/cli`, version `0.2.1`. npm registry publication is a separate step; the downloadable kit works without it. `npm run package:release` writes a verified archive and SHA-256 file to `artifacts/release/`. `npm run verify:release` exercises the same build in a temporary directory. Both pack all three workspaces, install their locked runtime dependency versions with scripts disabled, then verify the extracted kit. Neither publishes anything.
 
 To use the checkout's CLI in another project, invoke its absolute path:
 
@@ -69,7 +69,9 @@ unsus project . --format json --output /existing/report-directory/project.json
 
 Only semver declarations with matching installed names and versions are scanned. Missing or linked packages and version mismatches are `unresolved`; tags, aliases, workspace/file/Git references and packages beyond the limits are `omitted`. Each attempted package is limited to 10,000 filesystem entries and 100 MiB of file sizes, with the usual 256 KiB text-read limit. The default is 20 attempted packages in name order, adjustable from 1 to 100; missing packages also consume that limit. `coverage` reports every selected declaration and the scanned, unresolved, omitted and failed counts.
 
-Any blocked package makes the aggregate decision `block`; gaps or warnings make it at least `warn`. An inspection failure takes exit **3** even if another package blocks; otherwise block is **2**, warning/incomplete coverage **1**, and fully inspected selected dependencies with no warnings **0**. `--fail-on` sets the per-package policy threshold. Project reports support text and JSON; `explain` accepts single-package scan and diff reports only.
+Any blocked package makes the aggregate decision `block`; gaps or warnings make it at least `warn`. An inspection failure takes exit **3** even if another package blocks; otherwise block is **2**, warning/incomplete coverage **1**, and fully inspected selected dependencies with no warnings **0**. `--fail-on` sets the per-package policy threshold. Project text shows each package's risk, its highest-severity findings with observed locations, and omitted text files. Informational findings are summarized; JSON retains all findings and coverage details.
+
+Run `unsus explain project.json` to read a saved project report without rescanning. `explain` also accepts scan and diff reports; successful rendering exits **0** while showing the original report's decision and, for projects, its original exit code.
 
 ## Reports for CI
 

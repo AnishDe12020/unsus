@@ -103,7 +103,8 @@ Example: unsus install package-name@1.2.3
 Dependencies are not scanned. Exit codes: 0 installed, 1 review, 2 blocked, 3 failure.`,
   explain: `Usage: unsus explain <report.json>
 
-Render a saved scan or version-diff JSON report as readable text.
+Render a saved scan, version-diff or project JSON report as readable text.
+This only explains the saved report; it does not rescan or execute package code.
 Example: unsus explain report.json`
 };
 

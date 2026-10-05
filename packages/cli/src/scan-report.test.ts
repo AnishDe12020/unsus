@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import os from "node:os";
@@ -11,6 +11,36 @@ const cli = path.join(repo, "packages/cli/dist/index.js");
 const benign = path.join(repo, "fixtures/benign/normal-package");
 const blocked = path.join(repo, "fixtures/suspicious/postinstall-env-network");
 const scan = (...args: string[]) => spawnSync(process.execPath, [cli, "scan", ...args], { encoding: "utf8" });
+
+test("saved project reports explain blocking evidence and incomplete text coverage without changing policy", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "unsus-project-report-"));
+  try {
+    const modules = path.join(root, "node_modules"), incomplete = path.join(modules, "incomplete");
+    await mkdir(incomplete, { recursive: true });
+    const manifest = '{"dependencies":{"postinstall-env-network":"1.0.0","incomplete":"1.0.0"}}';
+    await writeFile(path.join(root, "package.json"), manifest);
+    await cp(blocked, path.join(modules, "postinstall-env-network"), { recursive: true });
+    await writeFile(path.join(incomplete, "package.json"), '{"name":"incomplete","version":"1.0.0"}');
+    await writeFile(path.join(incomplete, "large.js"), "x".repeat(256 * 1024 + 1));
+    const json = spawnSync(process.execPath, [cli, "project", root, "--json"], { encoding: "utf8" });
+    assert.equal(json.status, 2, json.stderr);
+    const report = JSON.parse(json.stdout);
+    assert.equal(report.coverage.scanned, 2);
+    assert.equal(report.coverage.complete, false);
+    const saved = path.join(root, "project.json"); await writeFile(saved, json.stdout);
+    const explained = spawnSync(process.execPath, [cli, "explain", saved], { encoding: "utf8" });
+    assert.equal(explained.status, 0, explained.stderr);
+    assert.equal(explained.stderr, "");
+    assert.match(explained.stdout, /Decision: BLOCK \(exit 2\)/);
+    assert.match(explained.stdout, /Environment variable access.*install\.js:3/);
+    assert.match(explained.stdout, /1 text file.*omitted.*large\.js/);
+    const text = spawnSync(process.execPath, [cli, "project", root], { encoding: "utf8" });
+    assert.equal(text.status, 2, text.stderr);
+    assert.equal(text.stdout, explained.stdout, "live and saved project reports explain the same evidence");
+    assert.equal(await readFile(saved, "utf8"), json.stdout);
+    assert.equal(await readFile(path.join(root, "package.json"), "utf8"), manifest);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 test("scan formats and atomic output preserve policy exits with clean report streams", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "unsus-report-"));

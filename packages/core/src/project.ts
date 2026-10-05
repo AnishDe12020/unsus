@@ -116,8 +116,32 @@ export async function scanProject(directory: string, options: ProjectOptions = {
 
 export function formatProjectText(result: ProjectResult): string {
   const c = result.coverage;
-  return ["UNSUS PROJECT REPORT", `Decision: ${result.decision.toUpperCase()} (exit ${result.exitCode})`,
+  const lines = ["UNSUS PROJECT REPORT", `Decision: ${result.decision.toUpperCase()} (exit ${result.exitCode})`,
     `Coverage: ${c.scanned}/${c.declared} declared direct dependencies scanned; ${c.unresolved} unresolved; ${c.omitted} omitted; ${c.failed} failed.`,
-    "Installed files only. Lockfile integrity and transitive dependencies are not verified.", "",
-    ...result.dependencies.map(item => `${item.name}@${item.requested}: ${item.status === "scanned" ? item.report!.decision : item.status}${item.reason ? ` — ${item.reason}` : ""}`), ""].join("\n");
+    "Installed files only. Lockfile integrity and transitive dependencies are not verified.",
+    "Heuristic findings require context; use JSON for all findings and omitted file paths.", ""];
+  const rank = { critical: 3, danger: 2, warning: 1, info: 0 };
+  for (const item of result.dependencies) {
+    const report = item.status === "scanned" ? item.report : undefined;
+    lines.push(`${item.name}@${item.requested}: ${report?.decision ?? item.status}${item.reason ? ` — ${item.reason}` : ""}`);
+    if (!report) continue;
+    lines.push(`  Risk: ${report.riskLevel.toUpperCase()} ${report.riskScore.toFixed(1)}/10`);
+    const omitted = report.coverage?.omittedTextFiles ?? [];
+    if (omitted.length) lines.push(`  ${omitted.length} text file(s) omitted from analysis: ${omitted.slice(0, 3).join(", ")}${omitted.length > 3 ? ` (+${omitted.length - 3} more)` : ""}`);
+    const review = report.findings.filter(f => f.severity !== "info").sort((a, b) => rank[b.severity] - rank[a.severity]);
+    const groups = new Map<string, { finding: typeof review[number]; count: number }>();
+    for (const finding of review) {
+      const key = `${finding.type}:${finding.severity}`, group = groups.get(key);
+      if (group) group.count++;
+      else groups.set(key, { finding, count: 1 });
+    }
+    for (const { finding, count } of [...groups.values()].slice(0, 3)) {
+      const location = finding.file ? ` (${finding.file}${finding.line ? `:${finding.line}` : ""})` : "";
+      lines.push(`  [${finding.severity}] ${finding.title}${location}: ${finding.message}${count > 1 ? ` (+${count - 1} similar finding(s))` : ""}`);
+    }
+    if (groups.size > 3) lines.push(`  ${groups.size - 3} more finding type(s) in JSON.`);
+    const info = report.findings.length - review.length;
+    if (info) lines.push(`  ${info} informational finding(s) in JSON.`);
+  }
+  return lines.concat("").join("\n");
 }
